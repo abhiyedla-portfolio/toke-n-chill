@@ -2,26 +2,116 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =============================================
+   Toke and Chill — Dark Urban Street Theme
+   ============================================= */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-primary:      #FF2D7B;
+  --color-secondary:    #0A0A0A;
+  --color-accent:       #00E5FF;
+  --color-text:         #FFFFFF;
+  --color-text-muted:   #888888;
+  --color-bg:           #000000;
+  --color-surface:      #111111;
+  --color-surface-hover:#1A1A1A;
+  --color-border:       #222222;
+  --font-display: var(--font-bebas), 'Bebas Neue', sans-serif;
+  --font-body: var(--font-dm-sans), 'DM Sans', sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* =============================================
+   Dizzy Dose — Neon Purple Variant
+   ============================================= */
+[data-brand="dizzy-dose"] {
+  --color-primary:      #A855F7;
+  --color-secondary:    #050505;
+  --color-accent:       #E8FF00;
+  --color-text:         #F0F0F0;
+  --color-text-muted:   #999999;
+  --color-bg:           #000000;
+  --color-surface:      #0F0F0F;
+  --color-surface-hover:#1A1A1A;
+  --color-border:       #1F1F1F;
+  --font-display: var(--font-bebas), 'Bebas Neue', sans-serif;
+  --font-body: var(--font-space-mono), 'Space Mono', monospace;
+}
+
+/* =============================================
+   Base Styles
+   ============================================= */
+* {
+  box-sizing: border-box;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background-color: var(--color-primary);
+  color: black;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* =============================================
+   Neon Glow Utilities
+   ============================================= */
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  .glow-pink {
+    box-shadow: 0 0 20px rgba(255, 45, 123, 0.3), 0 0 60px rgba(255, 45, 123, 0.1);
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(0, 229, 255, 0.3), 0 0 60px rgba(0, 229, 255, 0.1);
+  }
+
+  .glow-pink-sm {
+    box-shadow: 0 0 10px rgba(255, 45, 123, 0.2);
+  }
+
+  .border-glow-pink {
+    border-color: rgba(255, 45, 123, 0.4);
+  }
+
+  .border-glow-cyan {
+    border-color: rgba(0, 229, 255, 0.4);
+  }
+
+  .gradient-border-top {
+    border-top: 2px solid;
+    border-image: linear-gradient(to right, #FF2D7B, #00E5FF) 1;
+  }
+
+  .text-gradient-pink-cyan {
+    background: linear-gradient(135deg, #FF2D7B, #00E5FF);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .carousel-hide-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 }

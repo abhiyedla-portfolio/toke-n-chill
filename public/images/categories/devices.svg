@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3A3A3A"/>
+      <stop offset="100%" stop-color="#666666"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)" rx="12"/>
+  <text x="200" y="130" text-anchor="middle" font-size="64" fill="rgba(255,255,255,0.3)">🔋</text>
+  <text x="200" y="190" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" font-weight="600" fill="rgba(255,255,255,0.9)">Devices & Mods</text>
+  <text x="200" y="220" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" fill="rgba(255,255,255,0.5)">Available In Store</text>
+</svg>
