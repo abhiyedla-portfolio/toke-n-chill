@@ -3,9 +3,10 @@
   "configurations": [
     {
       "name": "dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 3000
+      "runtimeExecutable": "/Users/abhinavyedla/.nvm/versions/node/v24.14.0/bin/npx",
+      "runtimeArgs": ["next", "dev"],
+      "port": 3000,
+      "env": {"PATH": "/Users/abhinavyedla/.nvm/versions/node/v24.14.0/bin:/usr/bin:/bin"}
     }
   ]
 }
