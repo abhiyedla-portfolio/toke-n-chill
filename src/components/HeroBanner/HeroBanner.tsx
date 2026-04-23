@@ -40,14 +40,6 @@ function LoadingScreen({ onComplete }: { onComplete: () => void }) {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.6 }}
     >
-      {/* Grain */}
-      <div
-        className="absolute inset-0 pointer-events-none opacity-[0.04]"
-        style={{
-          backgroundImage: 'repeating-conic-gradient(#fff 0% 25%, transparent 0% 50%)',
-          backgroundSize: '3px 3px',
-        }}
-      />
 
       <motion.p
         className="text-[10px] uppercase tracking-[0.3em] mb-6"
@@ -251,14 +243,6 @@ export default function HeroBanner() {
 
       {/* Hero Section */}
       <section ref={heroRef} className="relative bg-black overflow-hidden">
-        {/* Grain overlay — persistent */}
-        <div
-          className="absolute inset-0 pointer-events-none z-10 opacity-[0.03]"
-          style={{
-            backgroundImage: 'repeating-conic-gradient(#fff 0% 25%, transparent 0% 50%)',
-            backgroundSize: '3px 3px',
-          }}
-        />
 
         {/* Join Our Team — top right like SŌM's waitlist button */}
         <motion.div
