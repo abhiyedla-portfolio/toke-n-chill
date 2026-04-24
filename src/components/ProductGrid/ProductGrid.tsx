@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import type { Product } from '@/data/products';
 import ProductCard from '@/components/ProductCard';
@@ -32,6 +32,11 @@ const itemVariants = {
 export default function ProductGrid({ products, showFilters = false }: ProductGridProps) {
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
 
+  // Reset brand filter whenever the category-filtered product list changes
+  useEffect(() => {
+    setSelectedBrand('all');
+  }, [products]);
+
   const brands = useMemo(() => {
     const unique = Array.from(new Set(products.map((p) => p.brand)));
     return unique.sort();
@@ -45,32 +50,35 @@ export default function ProductGrid({ products, showFilters = false }: ProductGr
   return (
     <div>
       {showFilters && brands.length > 1 && (
-        <div className="mb-6">
-          <label
-            htmlFor="brand-filter"
-            className="mr-2 text-sm font-medium"
-            style={{ color: '#888' }}
-          >
-            Filter by brand:
-          </label>
-          <select
-            id="brand-filter"
-            value={selectedBrand}
-            onChange={(e) => setSelectedBrand(e.target.value)}
-            className="rounded border px-3 py-1.5 text-sm"
+        <div className="mb-8 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-widest" style={{ color: '#555' }}>
+            Brand
+          </span>
+          <button
+            onClick={() => setSelectedBrand('all')}
+            className="rounded px-3 py-1 text-xs font-bold uppercase tracking-wider transition-all"
             style={{
-              borderColor: '#222',
-              backgroundColor: '#111',
-              color: '#fff',
+              backgroundColor: selectedBrand === 'all' ? '#fff' : 'transparent',
+              color: selectedBrand === 'all' ? '#000' : '#888',
+              border: `1px solid ${selectedBrand === 'all' ? '#fff' : '#333'}`,
             }}
           >
-            <option value="all">All Brands</option>
-            {brands.map((brand) => (
-              <option key={brand} value={brand}>
-                {brand}
-              </option>
-            ))}
-          </select>
+            All
+          </button>
+          {brands.map((brand) => (
+            <button
+              key={brand}
+              onClick={() => setSelectedBrand(brand)}
+              className="rounded px-3 py-1 text-xs font-bold uppercase tracking-wider transition-all"
+              style={{
+                backgroundColor: selectedBrand === brand ? '#fff' : 'transparent',
+                color: selectedBrand === brand ? '#000' : '#888',
+                border: `1px solid ${selectedBrand === brand ? '#fff' : '#333'}`,
+              }}
+            >
+              {brand}
+            </button>
+          ))}
         </div>
       )}
 
