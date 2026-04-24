@@ -14,7 +14,8 @@ import { useEffect, useRef, useState } from 'react';
 function LoadingScreen({ onComplete, targetCount }: { onComplete: () => void; targetCount: number }) {
   const [count, setCount] = useState(0);
   const [phase, setPhase] = useState<'counting' | 'revealing' | 'done'>('counting');
-  const target = targetCount > 0 ? targetCount : 500;
+
+  const target = 1200;
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -188,40 +189,33 @@ export default function HeroBanner() {
   const [loaded, setLoaded] = useState(false);
   const [showLoader, setShowLoader] = useState(true);
   const heroRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const directionRef = useRef<'forward' | 'backward'>('forward');
+  const fwdRef = useRef<HTMLVideoElement>(null);
+  const revRef = useRef<HTMLVideoElement>(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
   const titleY = useTransform(scrollYProgress, [0, 1], [0, 150]);
   const titleOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
 
-  // Ping-pong video: play forward, then seek backward using 'seeked' event
+  // Ping-pong: forward video ends → play reverse video, and vice versa
   useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
+    const fwd = fwdRef.current;
+    const rev = revRef.current;
+    if (!fwd || !rev) return;
 
-    const STEP = 0.066; // ~15fps backward (larger steps = smoother seeking)
-
-    const onSeeked = () => {
-      if (directionRef.current !== 'backward') return;
-      if (v.currentTime <= 0.1) {
-        directionRef.current = 'forward';
-        v.play();
-        return;
-      }
-      v.currentTime = Math.max(0, v.currentTime - STEP);
+    const swap = (hide: HTMLVideoElement, show: HTMLVideoElement) => {
+      hide.style.opacity = '0';
+      show.currentTime = 0;
+      show.style.opacity = '0.6';
+      void show.play();
     };
 
-    const onEnded = () => {
-      directionRef.current = 'backward';
-      v.pause();
-      v.currentTime = Math.max(0, v.currentTime - STEP);
-    };
+    const onFwdEnded = () => swap(fwd, rev);
+    const onRevEnded = () => swap(rev, fwd);
 
-    v.addEventListener('ended', onEnded);
-    v.addEventListener('seeked', onSeeked);
+    fwd.addEventListener('ended', onFwdEnded);
+    rev.addEventListener('ended', onRevEnded);
     return () => {
-      v.removeEventListener('ended', onEnded);
-      v.removeEventListener('seeked', onSeeked);
+      fwd.removeEventListener('ended', onFwdEnded);
+      rev.removeEventListener('ended', onRevEnded);
     };
   }, []);
 
@@ -302,17 +296,28 @@ export default function HeroBanner() {
             />
           ))}
 
-          {/* Smoke video background — loops forever */}
+          {/* Smoke video — ping-pong between forward and pre-encoded reverse */}
           <div className="absolute inset-0 pointer-events-none z-[1] overflow-hidden">
             <video
-              ref={videoRef}
+              ref={fwdRef}
               autoPlay
               muted
               playsInline
-              className="absolute inset-0 w-full h-full object-cover opacity-60"
-              style={{ mixBlendMode: 'screen' }}
+              preload="auto"
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ mixBlendMode: 'screen', opacity: 0.6 }}
             >
               <source src="/videos/smoke.mp4" type="video/mp4" />
+            </video>
+            <video
+              ref={revRef}
+              muted
+              playsInline
+              preload="auto"
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ mixBlendMode: 'screen', opacity: 0 }}
+            >
+              <source src="/videos/smoke-reverse.mp4" type="video/mp4" />
             </video>
           </div>
 
@@ -352,7 +357,7 @@ export default function HeroBanner() {
               animate={loaded ? { opacity: 1 } : {}}
               transition={{ delay: 0.8, duration: 0.6 }}
             >
-              {displayCount > 0 ? `${displayCount}+` : '500+'} products. 50+ premium brands. 13 categories.
+              1200+ products. 50+ premium brands. 13 categories.
               3 locations across Austin &amp; Leander, Texas.
               Open 7 days a week.
             </motion.p>
@@ -412,14 +417,15 @@ export default function HeroBanner() {
 
           {/* Stats bar */}
           <motion.div
-            className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-10 text-center max-w-3xl mx-auto"
+            className="mt-12 grid grid-cols-3 sm:grid-cols-5 gap-6 sm:gap-8 text-center max-w-4xl mx-auto"
             initial={{ opacity: 0, y: 20 }}
             animate={loaded ? { opacity: 1, y: 0 } : {}}
             transition={{ delay: 1.3, duration: 0.6 }}
           >
             {[
-              { n: displayCount > 0 ? `${displayCount}+` : '500+', label: 'Products' },
+              { n: '1200+', label: 'Products' },
               { n: '13', label: 'Categories' },
+              { n: '50+', label: 'Top Brands' },
               { n: '3', label: 'Stores' },
               { n: '7', label: 'Days Open' },
             ].map((s) => (

@@ -8,17 +8,26 @@ import { useCatalog } from '@/components/CatalogProvider';
 import type { Product } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 
+const VAPE_SLUGS = new Set(['disposables', 'eliquids', 'devices', 'thca']);
+
+const CATEGORY_TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'vapes', label: 'Vapes' },
+  ...categories.map((c) => ({ key: c.slug, label: c.name })),
+];
+
 interface ProductsPageClientProps {
   products: Product[];
 }
 
 export default function ProductsPageClient({ products }: ProductsPageClientProps) {
-  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [activeCategory, setActiveCategory] = useState<string>('vapes');
   const { products: liveProducts } = useCatalog();
   const allProducts = liveProducts.length > 0 ? liveProducts : products;
 
   const filtered = useMemo(() => {
     if (activeCategory === 'all') return allProducts;
+    if (activeCategory === 'vapes') return allProducts.filter((p) => VAPE_SLUGS.has(p.category));
     return allProducts.filter((p) => p.category === activeCategory);
   }, [activeCategory, allProducts]);
 
@@ -42,29 +51,18 @@ export default function ProductsPageClient({ products }: ProductsPageClientProps
       </h1>
 
       <div className="mb-8 flex flex-wrap gap-2">
-        <button
-          onClick={() => setActiveCategory('all')}
-          className="rounded px-4 py-1.5 text-sm font-bold uppercase tracking-wider transition-all"
-          style={{
-            backgroundColor: activeCategory === 'all' ? '#FF2D7B' : '#111',
-            color: activeCategory === 'all' ? '#000' : '#fff',
-            border: `1px solid ${activeCategory === 'all' ? '#FF2D7B' : '#222'}`,
-          }}
-        >
-          All
-        </button>
-        {categories.map((cat) => (
+        {CATEGORY_TABS.map((tab) => (
           <button
-            key={cat.slug}
-            onClick={() => setActiveCategory(cat.slug)}
+            key={tab.key}
+            onClick={() => setActiveCategory(tab.key)}
             className="rounded px-4 py-1.5 text-sm font-bold uppercase tracking-wider transition-all"
             style={{
-              backgroundColor: activeCategory === cat.slug ? '#FF2D7B' : '#111',
-              color: activeCategory === cat.slug ? '#000' : '#fff',
-              border: `1px solid ${activeCategory === cat.slug ? '#FF2D7B' : '#222'}`,
+              backgroundColor: activeCategory === tab.key ? '#FF2D7B' : '#111',
+              color: activeCategory === tab.key ? '#000' : '#fff',
+              border: `1px solid ${activeCategory === tab.key ? '#FF2D7B' : '#222'}`,
             }}
           >
-            {cat.name}
+            {tab.label}
           </button>
         ))}
       </div>
