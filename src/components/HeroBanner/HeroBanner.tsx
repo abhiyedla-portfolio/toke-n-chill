@@ -4,14 +4,13 @@ import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
 import { ChevronDown, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { useBrand } from '@/components/BrandProvider';
-import { useCatalog } from '@/components/CatalogProvider';
 import { categories } from '@/config/categories';
 import { useEffect, useRef, useState } from 'react';
 
 // ============================================================
 // LOADING SCREEN — Animated counter + brand reveal
 // ============================================================
-function LoadingScreen({ onComplete, targetCount }: { onComplete: () => void; targetCount: number }) {
+function LoadingScreen({ onComplete }: { onComplete: () => void }) {
   const [count, setCount] = useState(0);
   const [phase, setPhase] = useState<'counting' | 'revealing' | 'done'>('counting');
 
@@ -183,9 +182,6 @@ function ScrollingBanner() {
 // ============================================================
 export default function HeroBanner() {
   useBrand();
-  const { products } = useCatalog();
-  const productCount = products.length;
-  const displayCount = productCount > 0 ? Math.floor(productCount / 10) * 10 : 0;
   const [loaded, setLoaded] = useState(false);
   const [showLoader, setShowLoader] = useState(true);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -237,7 +233,7 @@ export default function HeroBanner() {
     <>
       {/* Loading Screen */}
       <AnimatePresence>
-        {showLoader && <LoadingScreen onComplete={handleLoadComplete} targetCount={displayCount} />}
+        {showLoader && <LoadingScreen onComplete={handleLoadComplete} />}
       </AnimatePresence>
 
       {/* Hero Section */}
