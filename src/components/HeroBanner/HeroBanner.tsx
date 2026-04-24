@@ -4,33 +4,35 @@ import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
 import { ChevronDown, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { useBrand } from '@/components/BrandProvider';
+import { useCatalog } from '@/components/CatalogProvider';
 import { categories } from '@/config/categories';
 import { useEffect, useRef, useState } from 'react';
 
 // ============================================================
 // LOADING SCREEN — Animated counter + brand reveal
 // ============================================================
-function LoadingScreen({ onComplete }: { onComplete: () => void }) {
+function LoadingScreen({ onComplete, targetCount }: { onComplete: () => void; targetCount: number }) {
   const [count, setCount] = useState(0);
   const [phase, setPhase] = useState<'counting' | 'revealing' | 'done'>('counting');
+  const target = targetCount > 0 ? targetCount : 500;
 
   useEffect(() => {
     const interval = setInterval(() => {
       setCount((prev) => {
-        if (prev >= 474) {
+        if (prev >= target) {
           clearInterval(interval);
           setPhase('revealing');
           setTimeout(() => {
             setPhase('done');
             setTimeout(onComplete, 400);
           }, 800);
-          return 474;
+          return target;
         }
         return prev + Math.floor(Math.random() * 35) + 10;
       });
     }, 40);
     return () => clearInterval(interval);
-  }, [onComplete]);
+  }, [onComplete, target]);
 
   if (phase === 'done') return null;
 
@@ -56,7 +58,7 @@ function LoadingScreen({ onComplete }: { onComplete: () => void }) {
         initial={{ opacity: 0.5, y: 5 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        {Math.min(count, 474)}
+        {Math.min(count, target)}
       </motion.p>
 
       {/* Progress bar */}
@@ -64,7 +66,7 @@ function LoadingScreen({ onComplete }: { onComplete: () => void }) {
         <motion.div
           className="h-full"
           style={{ backgroundColor: '#FF2D7B' }}
-          animate={{ width: `${Math.min((count / 474) * 100, 100)}%` }}
+          animate={{ width: `${Math.min((count / target) * 100, 100)}%` }}
           transition={{ duration: 0.1 }}
         />
       </div>
@@ -180,6 +182,9 @@ function ScrollingBanner() {
 // ============================================================
 export default function HeroBanner() {
   useBrand();
+  const { products } = useCatalog();
+  const productCount = products.length;
+  const displayCount = productCount > 0 ? Math.floor(productCount / 10) * 10 : 0;
   const [loaded, setLoaded] = useState(false);
   const [showLoader, setShowLoader] = useState(true);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -238,7 +243,7 @@ export default function HeroBanner() {
     <>
       {/* Loading Screen */}
       <AnimatePresence>
-        {showLoader && <LoadingScreen onComplete={handleLoadComplete} />}
+        {showLoader && <LoadingScreen onComplete={handleLoadComplete} targetCount={displayCount} />}
       </AnimatePresence>
 
       {/* Hero Section */}
@@ -347,7 +352,7 @@ export default function HeroBanner() {
               animate={loaded ? { opacity: 1 } : {}}
               transition={{ delay: 0.8, duration: 0.6 }}
             >
-              474+ products. 50+ premium brands. 13 categories.
+              {displayCount > 0 ? `${displayCount}+` : '500+'} products. 50+ premium brands. 13 categories.
               3 locations across Austin &amp; Leander, Texas.
               Open 7 days a week.
             </motion.p>
@@ -413,9 +418,9 @@ export default function HeroBanner() {
             transition={{ delay: 1.3, duration: 0.6 }}
           >
             {[
-              { n: '474+', label: 'Products' },
+              { n: displayCount > 0 ? `${displayCount}+` : '500+', label: 'Products' },
               { n: '13', label: 'Categories' },
-              { n: '50+', label: 'Top Brands' },
+              { n: '3', label: 'Stores' },
               { n: '7', label: 'Days Open' },
             ].map((s) => (
               <div key={s.label}>

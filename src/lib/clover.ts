@@ -77,12 +77,11 @@ export function getCloverCredentials(): CloverCredentials | null {
 
 // --- Fetch Wrapper ---
 
-const CACHE_TTL = parseInt(process.env.CLOVER_CACHE_TTL || '300', 10);
-
 async function cloverFetch<T>(
   credentials: CloverCredentials,
   endpoint: string,
   params?: Record<string, string>,
+  retries = 3,
 ): Promise<T | null> {
   const url = new URL(
     `${credentials.baseUrl}/merchants/${credentials.merchantId}/${endpoint}`,
@@ -91,30 +90,40 @@ async function cloverFetch<T>(
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   }
 
-  try {
-    const res = await fetch(url.toString(), {
-      headers: {
-        Authorization: `Bearer ${credentials.apiToken}`,
-        Accept: 'application/json',
-      },
-      next: { revalidate: CACHE_TTL, tags: ['clover-items'] },
-    });
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${credentials.apiToken}`,
+          Accept: 'application/json',
+        },
+      });
 
-    if (res.status === 429) {
-      console.warn('[Clover] Rate limited, will retry on next revalidation');
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('Retry-After') ?? '2', 10);
+        const delay = Math.max(retryAfter, 2) * 1000 * attempt;
+        console.warn(`[Clover] Rate limited on ${endpoint}, retrying in ${delay}ms (attempt ${attempt}/${retries})`);
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+        console.error(`[Clover] Rate limit retries exhausted for ${endpoint}`);
+        return null;
+      }
+
+      if (!res.ok) {
+        console.error(`[Clover] API error: ${res.status} ${res.statusText} for ${endpoint}`);
+        return null;
+      }
+
+      return (await res.json()) as T;
+    } catch (err) {
+      console.error('[Clover] Fetch failed:', err);
       return null;
     }
-
-    if (!res.ok) {
-      console.error(`[Clover] API error: ${res.status} ${res.statusText} for ${endpoint}`);
-      return null;
-    }
-
-    return (await res.json()) as T;
-  } catch (err) {
-    console.error('[Clover] Fetch failed:', err);
-    return null;
   }
+
+  return null;
 }
 
 // --- Data Fetchers ---
@@ -135,7 +144,6 @@ export async function fetchAllCloverItems(): Promise<CloverItem[] | null> {
         expand: 'categories,tags,modifierGroups,itemStock',
         limit: String(limit),
         offset: String(offset),
-        filter: 'hidden=false',
       },
     );
 
