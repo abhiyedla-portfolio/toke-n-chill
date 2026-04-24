@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X } from 'lucide-react';
-import { products } from '@/data/products';
+import { useCatalog } from '@/components/CatalogProvider';
+import { StockBadge } from '@/components/StockBadge';
 
 function highlightMatch(text: string, query: string): React.ReactNode {
   if (!query.trim()) return text;
@@ -25,6 +26,7 @@ export default function SearchBar() {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const { products, status } = useCatalog();
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
@@ -37,7 +39,7 @@ export default function SearchBar() {
           p.category.toLowerCase().includes(q)
       )
       .slice(0, 8);
-  }, [query]);
+  }, [products, query]);
 
   const handleOpen = useCallback(() => {
     setIsOpen(true);
@@ -202,21 +204,37 @@ export default function SearchBar() {
                                 {highlightMatch(product.category, query)}
                               </span>
                             </div>
-                            <p className="text-sm font-bold" style={{ color: '#FF2D7B' }}>
-                              {product.priceRange}
-                            </p>
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: '#FF2D7B' }}>
+                                Inventory Only
+                              </span>
+                              <StockBadge inStock={product.inStock} stockQuantity={product.stockQuantity} />
+                            </div>
                           </div>
                         </Link>
                       ))}
                     </div>
                   ) : (
                     <div className="rounded-lg p-8 text-center" style={{ backgroundColor: '#111111', border: '1px solid #222222' }}>
-                      <p className="text-lg font-medium text-[#666]">
-                        No results found for &ldquo;{query}&rdquo;
-                      </p>
-                      <p className="mt-1 text-sm text-[#444]">
-                        Try a different search term or browse our categories
-                      </p>
+                      {status === 'loading' ? (
+                        <>
+                          <p className="text-lg font-medium text-[#666]">
+                            Loading live inventory…
+                          </p>
+                          <p className="mt-1 text-sm text-[#444]">
+                            Results will appear once the catalog finishes syncing.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-lg font-medium text-[#666]">
+                            No results found for &ldquo;{query}&rdquo;
+                          </p>
+                          <p className="mt-1 text-sm text-[#444]">
+                            Try a different search term or browse our categories
+                          </p>
+                        </>
+                      )}
                     </div>
                   )}
                 </motion.div>

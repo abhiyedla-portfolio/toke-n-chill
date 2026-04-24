@@ -6,11 +6,13 @@ import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, Search } from 'lucide-react';
 import { useBrand } from '@/components/BrandProvider';
-import { products } from '@/data/products';
+import { useCatalog } from '@/components/CatalogProvider';
+import { StockBadge } from '@/components/StockBadge';
 
 function SearchOverlay({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const { products, status } = useCatalog();
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -32,7 +34,7 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
           p.category.toLowerCase().includes(q),
       )
       .slice(0, 8);
-  }, [query]);
+  }, [products, query]);
 
   return (
     <>
@@ -82,16 +84,25 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
                   <p className="truncate text-sm font-semibold text-white">
                     {product.name}
                   </p>
-                  <p className="text-sm font-bold" style={{ color: '#FF2D7B' }}>
-                    {product.priceRange}
-                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: '#FF2D7B' }}>
+                      Inventory Only
+                    </span>
+                    <StockBadge inStock={product.inStock} stockQuantity={product.stockQuantity} />
+                  </div>
                 </div>
               </Link>
             ))}
           </div>
         )}
 
-        {query.length >= 2 && results.length === 0 && (
+        {query.length >= 2 && status === 'loading' && results.length === 0 && (
+          <div className="mt-3 rounded-lg border p-6 text-center" style={{ backgroundColor: '#111', borderColor: '#222' }}>
+            <p style={{ color: '#888' }}>Loading live inventory…</p>
+          </div>
+        )}
+
+        {query.length >= 2 && status !== 'loading' && results.length === 0 && (
           <div className="mt-3 rounded-lg border p-6 text-center" style={{ backgroundColor: '#111', borderColor: '#222' }}>
             <p style={{ color: '#888' }}>No products found for &quot;{query}&quot;</p>
           </div>

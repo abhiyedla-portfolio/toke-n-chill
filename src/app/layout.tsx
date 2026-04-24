@@ -3,6 +3,7 @@ import { Playfair_Display, DM_Sans, Bebas_Neue, Space_Mono } from 'next/font/goo
 import './globals.css';
 import { getBrand, getBrandId } from '@/config/brands';
 import { BrandProvider } from '@/components/BrandProvider';
+import { CatalogProvider } from '@/components/CatalogProvider';
 import AgeGate from '@/components/AgeGate';
 import Navbar from '@/components/Navbar/Navbar';
 import Footer from '@/components/Footer/Footer';
@@ -75,13 +76,15 @@ export default function RootLayout({
         className={`${displayFont.variable} ${bodyFont.variable} ${playfairDisplay.variable} ${dmSans.variable} ${bebasNeue.variable} ${spaceMono.variable} antialiased`}
       >
         <BrandProvider>
-          <AgeGate />
-          <SmokeParticles />
-          <GlowCursor />
-          <Navbar />
-          <main className="relative min-h-screen">{children}</main>
-          <Footer />
-          <CookieBanner />
+          <CatalogProvider>
+            <AgeGate />
+            <SmokeParticles />
+            <GlowCursor />
+            <Navbar />
+            <main className="relative min-h-screen">{children}</main>
+            <Footer />
+            <CookieBanner />
+          </CatalogProvider>
         </BrandProvider>
       </body>
     </html>

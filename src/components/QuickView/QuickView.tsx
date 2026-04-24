@@ -4,6 +4,7 @@ import { useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Phone, Store } from 'lucide-react';
+import { StockBadge } from '@/components/StockBadge';
 import type { Product } from '@/data/products';
 
 const categoryGradients: Record<string, string> = {
@@ -149,9 +150,13 @@ export default function QuickView({ product, isOpen, onClose }: QuickViewProps) 
                     {product.name}
                   </h2>
 
-                  <p className="text-lg font-bold" style={{ color: '#FF2D7B' }}>
-                    {product.priceRange}
+                  <p className="text-xs font-bold uppercase tracking-[0.25em]" style={{ color: '#FF2D7B' }}>
+                    Live Inventory
                   </p>
+                  <p className="text-sm" style={{ color: '#888' }}>
+                    Pricing is available in store only.
+                  </p>
+                  <StockBadge inStock={product.inStock} stockQuantity={product.stockQuantity} size="md" />
 
                   {product.description && (
                     <p className="line-clamp-3 text-sm leading-relaxed text-[#AAA]">

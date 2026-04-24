@@ -7,6 +7,7 @@ import StoreCard from '@/components/StoreCard/StoreCard';
 import { DealCard } from '@/components/DealCard';
 import { deals } from '@/data/deals';
 import type { Product } from '@/data/products';
+import { useCatalog } from '@/components/CatalogProvider';
 import ProductCard from '@/components/ProductCard/ProductCard';
 import { NowHiring } from '@/components/NowHiring';
 import { GoogleReviews } from '@/components/GoogleReviews';
@@ -20,7 +21,10 @@ interface HomePageClientProps {
 
 export default function HomePageClient({ featuredProducts }: HomePageClientProps) {
   const brand = useBrand();
+  const { featuredProducts: liveFeaturedProducts } = useCatalog();
   const featuredDeals = deals.slice(0, 2);
+  const productsToRender =
+    liveFeaturedProducts.length > 0 ? liveFeaturedProducts : featuredProducts;
 
   return (
     <>
@@ -53,7 +57,7 @@ export default function HomePageClient({ featuredProducts }: HomePageClientProps
             </Link>
           </motion.div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {featuredProducts.map((product) => (
+            {productsToRender.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>

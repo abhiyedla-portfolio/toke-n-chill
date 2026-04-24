@@ -83,8 +83,11 @@ export default function ProductCard({ product }: ProductCardProps) {
           {product.name}
         </h3>
 
-        <p className="text-sm font-bold" style={{ color: '#FF2D7B' }}>
-          {product.priceRange}
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: '#FF2D7B' }}>
+          Live Inventory
+        </p>
+        <p className="text-sm" style={{ color: '#888' }}>
+          Pricing available in store only.
         </p>
 
         <div className="flex flex-wrap items-center gap-1.5 pt-1">

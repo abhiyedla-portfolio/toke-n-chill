@@ -1,9 +1,14 @@
 // Auto-generated from Modisoft inventory export
 // Last updated: 2026-03-27
 
-import type { Product } from './products';
+import type { Product } from '@/types/catalog';
 
-export const inventoryProducts: Product[] = [
+export interface InventoryProductRecord extends Product {
+  price: number;
+  priceRange: string;
+}
+
+export const inventoryProducts: InventoryProductRecord[] = [
   {
     id: 'koi-cbd2000mg-tincturelemon-lime',
     slug: 'koi-cbd2000mg-tincturelemon-lime',
