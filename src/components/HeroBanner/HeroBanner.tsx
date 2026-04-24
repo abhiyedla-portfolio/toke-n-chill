@@ -4,17 +4,16 @@ import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
 import { ChevronDown, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { useBrand } from '@/components/BrandProvider';
-import { useCatalog } from '@/components/CatalogProvider';
 import { categories } from '@/config/categories';
 import { useEffect, useRef, useState } from 'react';
 
 // ============================================================
 // LOADING SCREEN — Animated counter + brand reveal
 // ============================================================
-function LoadingScreen({ onComplete, targetCount }: { onComplete: () => void; targetCount: number }) {
+function LoadingScreen({ onComplete }: { onComplete: () => void }) {
   const [count, setCount] = useState(0);
   const [phase, setPhase] = useState<'counting' | 'revealing' | 'done'>('counting');
-  const target = targetCount > 0 ? targetCount : 500;
+  const target = 1200;
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -182,9 +181,6 @@ function ScrollingBanner() {
 // ============================================================
 export default function HeroBanner() {
   useBrand();
-  const { products } = useCatalog();
-  const productCount = products.length;
-  const displayCount = productCount > 0 ? Math.floor(productCount / 10) * 10 : 0;
   const [loaded, setLoaded] = useState(false);
   const [showLoader, setShowLoader] = useState(true);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -243,7 +239,7 @@ export default function HeroBanner() {
     <>
       {/* Loading Screen */}
       <AnimatePresence>
-        {showLoader && <LoadingScreen onComplete={handleLoadComplete} targetCount={displayCount} />}
+        {showLoader && <LoadingScreen onComplete={handleLoadComplete} />}
       </AnimatePresence>
 
       {/* Hero Section */}
@@ -352,7 +348,7 @@ export default function HeroBanner() {
               animate={loaded ? { opacity: 1 } : {}}
               transition={{ delay: 0.8, duration: 0.6 }}
             >
-              {displayCount > 0 ? `${displayCount}+` : '500+'} products. 50+ premium brands. 13 categories.
+              1200+ products. 50+ premium brands. 13 categories.
               3 locations across Austin &amp; Leander, Texas.
               Open 7 days a week.
             </motion.p>
@@ -412,14 +408,15 @@ export default function HeroBanner() {
 
           {/* Stats bar */}
           <motion.div
-            className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-10 text-center max-w-3xl mx-auto"
+            className="mt-12 grid grid-cols-3 sm:grid-cols-5 gap-6 sm:gap-8 text-center max-w-4xl mx-auto"
             initial={{ opacity: 0, y: 20 }}
             animate={loaded ? { opacity: 1, y: 0 } : {}}
             transition={{ delay: 1.3, duration: 0.6 }}
           >
             {[
-              { n: displayCount > 0 ? `${displayCount}+` : '500+', label: 'Products' },
+              { n: '1200+', label: 'Products' },
               { n: '13', label: 'Categories' },
+              { n: '50+', label: 'Top Brands' },
               { n: '3', label: 'Stores' },
               { n: '7', label: 'Days Open' },
             ].map((s) => (
