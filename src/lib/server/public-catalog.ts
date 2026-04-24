@@ -1,33 +1,12 @@
 import 'server-only';
 
-import { mapCloverCategory } from '@/config/clover-category-map';
-import { products as staticProducts } from '@/data/products';
-import { fetchAllCloverItems, fetchItemStocks, type CloverItem } from '@/lib/clover';
 import { getFeaturedCatalogProducts } from '@/lib/catalog-utils';
 import { slugify } from '@/lib/utils';
 import type { CatalogResponse, Product } from '@/types/catalog';
-
-type D1DatabaseLike = {
-  prepare: (query: string) => {
-    all: <T = unknown>() => Promise<{ results?: T[] }>;
-  };
-};
-
-interface ProductMetadataRow {
-  brand: string | null;
-  category: string | null;
-  clover_id: string | null;
-  description: string | null;
-  featured: number | null;
-  hide_from_catalog: number | null;
-  image: string | null;
-  is_active: number | null;
-  name: string | null;
-  new_arrival: number | null;
-  slug: string | null;
-  sort_order: number | null;
-  variants_json: string | null;
-}
+import {
+  getCatalogDb,
+  type ProductCatalogRow,
+} from './catalog-db';
 
 function parseFlag(value: number | null | undefined) {
   return value === 1;
@@ -48,123 +27,39 @@ function parseVariants(variantsJson: string | null | undefined): string[] | unde
   }
 }
 
-function extractBrand(item: CloverItem): string {
-  const tagBrand = item.tags?.elements?.find((tag) =>
-    tag.name.toLowerCase().startsWith('brand:'),
-  );
-
-  if (tagBrand) {
-    return tagBrand.name.replace(/^brand:\s*/i, '').trim();
+function toProduct(row: ProductCatalogRow): Product | null {
+  if (!row.clover_id) {
+    return null;
   }
 
-  if (item.name.includes(' - ')) {
-    return item.name.split(' - ')[0].trim();
-  }
+  const name = row.name?.trim();
+  const category = row.category?.trim();
 
-  return 'House Brand';
-}
-
-function normalizeName(item: CloverItem): string {
-  if (!item.name.includes(' - ')) {
-    return item.name;
-  }
-
-  return item.name.split(' - ').slice(1).join(' - ').trim();
-}
-
-function extractVariants(item: CloverItem): string[] | undefined {
-  const variants: string[] = [];
-
-  for (const group of item.modifierGroups?.elements ?? []) {
-    for (const modifier of group.modifiers?.elements ?? []) {
-      variants.push(modifier.name);
-    }
-  }
-
-  return variants.length > 0 ? variants : undefined;
-}
-
-function extractCategory(item: CloverItem): string {
-  for (const category of item.categories?.elements ?? []) {
-    const mapped = mapCloverCategory(category.name);
-
-    if (mapped) {
-      return mapped;
-    }
-  }
-
-  return 'accessories';
-}
-
-function buildD1OnlyProduct(
-  row: ProductMetadataRow,
-  inventoryUpdatedAt: string,
-): Product | null {
-  if (!row.slug || !row.name || !row.category) {
+  if (!name || !category) {
     return null;
   }
 
   return {
     brand: row.brand ?? 'House Brand',
-    category: row.category,
-    cloverId: row.clover_id ?? undefined,
+    category,
+    cloverId: row.clover_id,
     description: row.description ?? '',
     featured: parseFlag(row.featured),
-    id: row.clover_id ?? row.slug,
+    id: row.clover_id,
     image: row.image ?? '/images/products/placeholder.jpg',
-    inventoryUpdatedAt,
-    name: row.name,
+    inStock: row.in_stock == null ? undefined : parseFlag(row.in_stock),
+    inventoryUpdatedAt:
+      row.synced_at ??
+      (row.clover_updated_at ? new Date(row.clover_updated_at).toISOString() : undefined),
+    name,
     newArrival: parseFlag(row.new_arrival),
-    slug: row.slug,
+    slug: row.slug ?? slugify(name),
+    stockQuantity: row.stock_quantity ?? undefined,
     variants: parseVariants(row.variants_json),
   };
 }
 
-function mergeProduct(
-  item: CloverItem,
-  stockMap: Map<string, number>,
-  metadata: ProductMetadataRow | undefined,
-  inventoryUpdatedAt: string,
-): Product {
-  const stockQuantity = stockMap.get(item.id) ?? item.itemStock?.quantity;
-
-  return {
-    brand: metadata?.brand ?? extractBrand(item),
-    category: metadata?.category ?? extractCategory(item),
-    cloverId: item.id,
-    description: metadata?.description ?? item.description ?? '',
-    featured:
-      metadata?.featured != null
-        ? parseFlag(metadata.featured)
-        : item.tags?.elements?.some((tag) => tag.name.toLowerCase() === 'featured') ?? false,
-    id: item.id,
-    image: metadata?.image ?? '/images/products/placeholder.jpg',
-    inStock: stockQuantity != null ? stockQuantity > 0 : undefined,
-    inventoryUpdatedAt,
-    name: metadata?.name ?? normalizeName(item),
-    newArrival:
-      metadata?.new_arrival != null
-        ? parseFlag(metadata.new_arrival)
-        : item.tags?.elements?.some((tag) => {
-          const normalized = tag.name.toLowerCase();
-          return normalized === 'new' || normalized === 'new arrival';
-        }) ?? false,
-    slug: metadata?.slug ?? slugify(item.name),
-    stockQuantity,
-    variants: parseVariants(metadata?.variants_json) ?? extractVariants(item),
-  };
-}
-
-async function getCatalogDb(): Promise<D1DatabaseLike | undefined> {
-  const globalScope = globalThis as Record<PropertyKey, unknown>;
-  const context = globalScope[Symbol.for('__cloudflare-context__')] as
-    | { env?: { CATALOG_DB?: D1DatabaseLike } }
-    | undefined;
-
-  return context?.env?.CATALOG_DB;
-}
-
-async function loadMetadata(): Promise<ProductMetadataRow[]> {
+async function loadCatalogRows(): Promise<ProductCatalogRow[]> {
   const db = await getCatalogDb();
 
   if (!db) {
@@ -173,119 +68,53 @@ async function loadMetadata(): Promise<ProductMetadataRow[]> {
 
   const response = await db.prepare(`
     SELECT
-      clover_id,
       slug,
+      clover_id,
       name,
       brand,
       category,
       description,
       image,
+      variants_json,
       featured,
       new_arrival,
       sort_order,
       is_active,
       hide_from_catalog,
-      variants_json
+      in_stock,
+      stock_quantity,
+      is_visible,
+      clover_updated_at,
+      synced_at
     FROM product_metadata
-  `).all<ProductMetadataRow>();
+    WHERE clover_id IS NOT NULL
+      AND is_active != 0
+      AND hide_from_catalog = 0
+      AND is_visible = 1
+    ORDER BY sort_order ASC, featured DESC, name ASC
+  `).all<ProductCatalogRow>();
 
   return response.results ?? [];
 }
 
-function sortProducts(products: Product[], metadataRows: ProductMetadataRow[]) {
-  const sortOrderById = new Map<string, number>();
-
-  for (const row of metadataRows) {
-    const key = row.clover_id ?? row.slug ?? undefined;
-
-    if (key) {
-      sortOrderById.set(key, row.sort_order ?? 0);
-    }
-  }
-
-  return [...products].sort((left, right) => {
-    const leftSort = sortOrderById.get(left.cloverId ?? left.slug) ?? 0;
-    const rightSort = sortOrderById.get(right.cloverId ?? right.slug) ?? 0;
-
-    if (leftSort !== rightSort) {
-      return leftSort - rightSort;
-    }
-
-    if (left.featured !== right.featured) {
-      return left.featured ? -1 : 1;
-    }
-
-    return left.name.localeCompare(right.name);
-  });
+function getGeneratedAt(rows: ProductCatalogRow[]) {
+  return rows
+    .map((row) => row.synced_at)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1) ?? new Date().toISOString();
 }
 
 export async function getPublicCatalog(): Promise<CatalogResponse> {
-  const metadataRows = await loadMetadata();
-  const activeMetadataRows = metadataRows.filter(
-    (row) => !parseFlag(row.hide_from_catalog) && row.is_active !== 0,
-  );
-  const metadataByCloverId = new Map(
-    activeMetadataRows
-      .filter((row) => row.clover_id)
-      .map((row) => [row.clover_id as string, row]),
-  );
-  const metadataBySlug = new Map(
-    activeMetadataRows
-      .filter((row) => row.slug)
-      .map((row) => [row.slug as string, row]),
-  );
-  const inventoryUpdatedAt = new Date().toISOString();
-
-  try {
-    const [items, stockMap] = await Promise.all([
-      fetchAllCloverItems(),
-      fetchItemStocks(),
-    ]);
-
-    if (items && items.length > 0) {
-      const liveProducts = items
-        .filter((item) => !item.hidden && item.available !== false)
-        .filter((item) => {
-          const metadata =
-            metadataByCloverId.get(item.id) ??
-            metadataBySlug.get(slugify(item.name));
-
-          return !metadata || !parseFlag(metadata.hide_from_catalog);
-        })
-        .map((item) => {
-          const metadata =
-            metadataByCloverId.get(item.id) ??
-            metadataBySlug.get(slugify(item.name));
-
-          return mergeProduct(item, stockMap ?? new Map(), metadata, inventoryUpdatedAt);
-        });
-
-      return {
-        generatedAt: inventoryUpdatedAt,
-        products: sortProducts(liveProducts, activeMetadataRows),
-        source: activeMetadataRows.length > 0 ? 'clover+d1' : 'clover',
-      };
-    }
-  } catch (error) {
-    console.warn('[PublicCatalog] Clover sync failed, falling back.', error);
-  }
-
-  if (activeMetadataRows.length > 0) {
-    const fallbackProducts = activeMetadataRows
-      .map((row) => buildD1OnlyProduct(row, inventoryUpdatedAt))
-      .filter((product): product is Product => product !== null);
-
-    return {
-      generatedAt: inventoryUpdatedAt,
-      products: sortProducts(fallbackProducts, activeMetadataRows),
-      source: 'd1',
-    };
-  }
+  const rows = await loadCatalogRows();
+  const products = rows
+    .map(toProduct)
+    .filter((product): product is Product => product !== null);
 
   return {
-    generatedAt: inventoryUpdatedAt,
-    products: staticProducts,
-    source: 'static',
+    generatedAt: getGeneratedAt(rows),
+    products,
+    source: products.length > 0 ? 'd1-sync' : 'empty',
   };
 }
 

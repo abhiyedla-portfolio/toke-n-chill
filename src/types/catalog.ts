@@ -18,5 +18,5 @@ export interface Product {
 export interface CatalogResponse {
   products: Product[];
   generatedAt: string;
-  source: 'clover' | 'clover+d1' | 'd1' | 'static';
+  source: 'd1-sync' | 'empty';
 }

@@ -18,7 +18,7 @@ import {
 } from '@/lib/catalog-browser-cache';
 import { getFeaturedCatalogProducts } from '@/lib/catalog-utils';
 
-type CatalogSource = 'empty' | 'cache' | 'network' | 'fallback';
+type CatalogSource = 'empty' | 'cache' | 'network';
 type CatalogStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 interface CatalogContextValue {
@@ -31,11 +31,6 @@ interface CatalogContextValue {
 }
 
 const CatalogContext = createContext<CatalogContextValue | null>(null);
-
-async function loadFallbackProducts(): Promise<Product[]> {
-  const fallbackData = await import('@/data/products');
-  return fallbackData.products;
-}
 
 export function CatalogProvider({
   children,
@@ -118,16 +113,11 @@ export function CatalogProvider({
           return;
         }
 
-        try {
-          const fallbackProducts = await loadFallbackProducts();
-          setProducts(fallbackProducts);
-          setGeneratedAt(undefined);
-          setSource('fallback');
-          setStatus('ready');
-        } catch {
-          console.warn('[CatalogProvider] Unable to load live or fallback catalog.', error);
-          setStatus('error');
-        }
+        console.warn('[CatalogProvider] Unable to load synced catalog.', error);
+        setProducts([]);
+        setGeneratedAt(undefined);
+        setSource('empty');
+        setStatus('error');
       }
     })();
 

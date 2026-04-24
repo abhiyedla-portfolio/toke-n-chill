@@ -1,25 +1,30 @@
 {
 	"$schema": "./node_modules/wrangler/config-schema.json",
-	"main": ".open-next/worker.js",
-	"name": "toke-n-chill",
-	"compatibility_date": "2026-04-23",
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
-	"assets": {
-		"directory": ".open-next/assets",
-		"binding": "ASSETS"
-	},
+  "main": "custom-worker.ts",
+  "name": "toke-n-chill",
+  "compatibility_date": "2026-04-23",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "triggers": {
+    "crons": [
+      "*/10 * * * *"
+    ]
+  },
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
 	"observability": {
 		"enabled": true
 	},
-	"d1_databases": [
-		{
-			"binding": "toke_n_chill_catalog",
-			"database_name": "toke-n-chill-catalog",
-			"database_id": "11420296-6861-41d6-ae65-50d674deb1eb",
-			"remote": true
-		}
+		"d1_databases": [
+			{
+				"binding": "CATALOG_DB",
+				"database_name": "toke-n-chill-catalog",
+				"database_id": "11420296-6861-41d6-ae65-50d674deb1eb",
+				"remote": true
+			}
 	]
 	// Add your D1 binding after you create the database:
 	// "d1_databases": [

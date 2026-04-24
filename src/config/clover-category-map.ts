@@ -7,6 +7,7 @@ export const cloverCategoryMap: Record<string, string> = {
   'disposable vapes': 'disposables',
   'disposables': 'disposables',
   'disposable': 'disposables',
+  'vape': 'disposables',
 
   // Devices & Mods
   'devices': 'devices',
@@ -53,11 +54,13 @@ export const cloverCategoryMap: Record<string, string> = {
 
   // THCA & hemp flower
   'thca': 'thca',
+  'thca prerolls': 'thca',
   'thca flower': 'thca-flower',
   'flower': 'thca-flower',
 
   // Kratom
   'kratom': 'kratom',
+  '7oh kratom tablets': 'kratom',
   'kratom shots': 'kratom',
   'kratom extracts': 'kratom',
 
@@ -69,11 +72,15 @@ export const cloverCategoryMap: Record<string, string> = {
   'tobacco': 'tobacco',
   'cigars': 'tobacco',
   'cigarettes': 'tobacco',
+  'zyn': 'tobacco',
 
   // Papers and wraps
   'wraps': 'prerolls',
   'papers': 'prerolls',
   'cones': 'prerolls',
+
+  // Misc storefront groupings seen in Clover exports
+  'enhancement': 'accessories',
 };
 
 /** Default category for unmapped Clover items */

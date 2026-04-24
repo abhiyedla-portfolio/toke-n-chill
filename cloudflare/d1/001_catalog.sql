@@ -12,6 +12,11 @@ CREATE TABLE IF NOT EXISTS product_metadata (
   sort_order INTEGER NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1,
   hide_from_catalog INTEGER NOT NULL DEFAULT 0,
+  in_stock INTEGER,
+  stock_quantity REAL,
+  is_visible INTEGER NOT NULL DEFAULT 0,
+  clover_updated_at INTEGER,
+  synced_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -24,6 +29,9 @@ CREATE INDEX IF NOT EXISTS idx_product_metadata_category
 
 CREATE INDEX IF NOT EXISTS idx_product_metadata_sort_order
   ON product_metadata (sort_order, featured DESC, name ASC);
+
+CREATE INDEX IF NOT EXISTS idx_product_metadata_visibility
+  ON product_metadata (is_active, is_visible, hide_from_catalog, category);
 
 CREATE TRIGGER IF NOT EXISTS trg_product_metadata_updated_at
 AFTER UPDATE ON product_metadata

@@ -1,29 +1,23 @@
 # Toke n Chill
 
-Next.js storefront with live Clover inventory, Cloudflare D1 product metadata, and Cloudflare Workers deployment via OpenNext.
+Next.js storefront deployed to Cloudflare Workers with OpenNext.
 
-## What Changed
+## Current Catalog Model
 
-- Product prices are no longer shown in the live catalog UI.
-- The public catalog now lives at `src/app/api/catalog/route.ts` instead of a Pages Functions sidecar.
-- Product pages and detail routes now run as a real Next.js app on Cloudflare Workers, so `/products/[category]/[slug]` can resolve live Clover items that were not present at build time.
-- Durable product metadata is stored in Cloudflare D1 using `cloudflare/d1/001_catalog.sql`.
-- A one-time D1 seed/import script now exists at `scripts/seed-d1-from-inventory.cjs`.
-- Browser-side catalog caching still happens through `src/components/CatalogProvider/CatalogProvider.tsx`, but the server render and the client refresh now share the same catalog source.
+- Clover is the source of truth for products and inventory.
+- A background sync writes the Clover catalog into Cloudflare D1.
+- The storefront reads only from D1.
+- Public catalog responses never include prices.
+- The browser caches only the sanitized `/api/catalog` payload.
 
-## Runtime Architecture
+## Runtime Flow
 
-1. Next.js renders pages from the app router.
-2. OpenNext converts the build output into a Cloudflare Worker bundle.
-3. The Worker serves dynamic routes and the `/api/catalog` route.
-4. The server-side catalog loader in `src/lib/server/public-catalog.ts`:
-   - fetches Clover inventory,
-   - reads D1 metadata when the `CATALOG_DB` binding is available,
-   - merges them,
-   - strips prices from the public payload.
-5. The client-side `CatalogProvider` caches the sanitized catalog in `localStorage` and refreshes it in the background.
+1. Cloudflare Cron triggers the custom worker in [custom-worker.ts](/Users/abhinavyedla/Desktop/Code/toke-n-chill/custom-worker.ts).
+2. The scheduled job runs [src/lib/server/clover-sync.ts](/Users/abhinavyedla/Desktop/Code/toke-n-chill/src/lib/server/clover-sync.ts) and upserts Clover inventory into `product_metadata`.
+3. The public API in [src/app/api/catalog/route.ts](/Users/abhinavyedla/Desktop/Code/toke-n-chill/src/app/api/catalog/route.ts) reads the synced D1 snapshot from [src/lib/server/public-catalog.ts](/Users/abhinavyedla/Desktop/Code/toke-n-chill/src/lib/server/public-catalog.ts).
+4. The browser caches that sanitized response through [src/components/CatalogProvider/CatalogProvider.tsx](/Users/abhinavyedla/Desktop/Code/toke-n-chill/src/components/CatalogProvider/CatalogProvider.tsx).
 
-## Local Commands
+## Commands
 
 ```bash
 npm run build
@@ -32,117 +26,110 @@ npm run deploy
 npm run catalog:seed
 ```
 
-## Cloudflare Worker Setup
+`npm run catalog:seed` is now optional legacy tooling. The live catalog no longer depends on a seeded TS product list.
 
-### 1. Create the D1 database
+## Cloudflare Setup
 
-Run the schema in:
+### 1. Create D1
+
+Pick a name like `toke-n-chill-catalog`:
 
 ```bash
-cloudflare/d1/001_catalog.sql
+npx wrangler d1 create toke-n-chill-catalog
 ```
 
-### 2. Add the D1 binding to Wrangler
+### 2. Add the D1 binding
 
-`wrangler.jsonc` already contains the Worker/OpenNext configuration. After creating the database, add this block back under the top-level config:
+Update [wrangler.jsonc](/Users/abhinavyedla/Desktop/Code/toke-n-chill/wrangler.jsonc) with the real D1 binding:
 
 ```jsonc
 "d1_databases": [
   {
     "binding": "CATALOG_DB",
-    "database_name": "your-database-name",
+    "database_name": "toke-n-chill-catalog",
     "database_id": "your-database-uuid"
   }
 ]
 ```
 
-### 3. Add environment variables and secrets in Cloudflare
+### 3. Run the schema
 
-Set these in your Worker/Pages project:
+Fresh database:
 
-- `NEXT_PUBLIC_BRAND` set to `toke-and-chill` or `dizzy-dose`
-- `CLOVER_API_BASE_URL` optional, defaults to `https://api.clover.com/v3`
-- `CLOVER_CACHE_TTL` optional, defaults to `300`
-- brand-specific Clover credentials:
+```bash
+npx wrangler d1 execute toke-n-chill-catalog --file cloudflare/d1/001_catalog.sql --remote
+```
 
+If you already created the earlier schema before the Clover sync refactor, also run:
+
+```bash
+npx wrangler d1 execute toke-n-chill-catalog --file cloudflare/d1/002_clover_sync_snapshot.sql --remote
+```
+
+### 4. Configure secrets and env vars
+
+Set these in Cloudflare:
+
+- `NEXT_PUBLIC_BRAND=toke-and-chill` or `dizzy-dose`
 - `CLOVER_MERCHANT_ID_TOKE`
 - `CLOVER_API_TOKEN_TOKE`
 - `CLOVER_MERCHANT_ID_DIZZY`
 - `CLOVER_API_TOKEN_DIZZY`
+- `CLOVER_SYNC_SECRET`
+- optional `CLOVER_API_BASE_URL`
+- optional `CLOVER_CACHE_TTL`
 
-If you only use one Clover merchant today, you can still populate both brand-specific pairs with the same merchant ID and token until the second store is ready.
+If you only have one Clover merchant right now, it is fine to populate both brand-specific credential pairs with the same merchant ID and token until the second store is ready.
 
-### 4. Seed D1 from the current inventory TS file
+### 5. Deploy
 
-Generate the SQL file:
+```bash
+npm run deploy
+```
+
+### 6. Trigger the first sync manually
+
+Cron will keep the database fresh every 10 minutes, but you should trigger the first sync immediately after deploy:
+
+```bash
+curl -X POST https://your-domain.com/api/admin/clover-sync \
+  -H "Authorization: Bearer $CLOVER_SYNC_SECRET"
+```
+
+### 7. Verify the public catalog
+
+```bash
+curl -sS https://your-domain.com/api/catalog
+```
+
+You should see:
+
+- products sourced from Clover-backed D1 rows
+- `inStock` and `stockQuantity`
+- no `price` field
+
+## Optional Legacy Metadata Import
+
+If you want to preserve legacy slugs, images, featured flags, or sort order from the old TS catalog, you can still generate and import the one-time seed:
 
 ```bash
 npm run catalog:seed
+npx wrangler d1 execute toke-n-chill-catalog --file cloudflare/d1/seed-product-metadata.sql --remote
 ```
 
-This writes:
-
-```bash
-cloudflare/d1/seed-product-metadata.sql
-```
-
-Then import it into D1:
-
-```bash
-node scripts/seed-d1-from-inventory.cjs --execute --remote --database <your-database-name>
-```
-
-If you prefer, you can also import the generated SQL file manually with Wrangler:
-
-```bash
-npx wrangler d1 execute <your-database-name> --file cloudflare/d1/seed-product-metadata.sql --remote
-```
-
-## D1 Metadata Table
-
-The `product_metadata` table stores site-facing overrides such as:
-
-- `slug`
-- `clover_id`
-- `name`
-- `brand`
-- `category`
-- `description`
-- `image`
-- `variants_json`
-- `featured`
-- `new_arrival`
-- `sort_order`
-- `is_active`
-- `hide_from_catalog`
-
-If `clover_id` is not filled yet, the catalog loader falls back to matching by `slug`.
-
-## Dynamic Product Pages
-
-`src/app/products/[category]/[slug]/page.tsx` no longer depends on `generateStaticParams()` from the inventory seed file. That means:
-
-- known routes can still be cached and served efficiently,
-- new Clover product slugs are no longer blocked by static export,
-- product detail pages can render on demand in the Worker runtime.
+That import is optional now. Unmatched seeded rows are not shown publicly unless Clover sync links them to a real Clover item.
 
 ## Caching
 
-- Static assets are cached via `public/_headers`.
-- `/api/catalog` returns:
+- Static assets are cached via [public/_headers](/Users/abhinavyedla/Desktop/Code/toke-n-chill/public/_headers).
+- `/api/catalog` returns `ETag` plus:
 
 ```text
 Cache-Control: public, max-age=60, s-maxage=120, stale-while-revalidate=600
 ```
 
-- The browser stores only sanitized public catalog data in `localStorage`.
-- No Clover token or product pricing is stored in the browser cache.
-
-## Fallback Behavior
-
-- If D1 is not bound yet, the app still works using Clover plus the build-time fallback catalog.
-- If Clover is unavailable, the server falls back to D1 metadata only.
-- If both live sources are unavailable, the browser falls back to the build-time static catalog.
+- The browser caches only the sanitized public catalog payload in `localStorage`.
+- Clover credentials and raw prices never reach the browser.
 
 ## Verification
 

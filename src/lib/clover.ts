@@ -1,5 +1,3 @@
-import 'server-only';
-
 import { getBrandId } from '@/config/brands';
 
 // --- Clover API Types ---
@@ -11,11 +9,13 @@ export interface CloverItem {
   description?: string;
   hidden?: boolean;
   available?: boolean;
+  enabledOnline?: boolean;
   autoManage?: boolean;
   categories?: { elements: CloverCategory[] };
   tags?: { elements: { id: string; name: string }[] };
   modifierGroups?: { elements: CloverModifierGroup[] };
-  itemStock?: { quantity: number };
+  itemStock?: { quantity: number; stockCount?: number; modifiedTime?: number };
+  modifiedTime?: number;
 }
 
 export interface CloverCategory {
