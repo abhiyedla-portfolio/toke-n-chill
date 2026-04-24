@@ -254,6 +254,11 @@ export default function HeroBanner() {
     v.addEventListener('play', onPlay);
     v.addEventListener('ended', onEnded);
 
+    // Autoplay may have fired before listeners attached — start immediately if already playing
+    if (!v.paused && !v.ended) {
+      onPlay();
+    }
+
     return () => {
       cancelAnimationFrame(rafId);
       v.removeEventListener('play', onPlay);
@@ -346,7 +351,8 @@ export default function HeroBanner() {
               autoPlay
               muted
               playsInline
-              className="hidden"
+              className="absolute"
+              style={{ width: 0, height: 0, overflow: 'hidden' }}
             >
               <source src="/videos/smoke.mp4" type="video/mp4" />
             </video>
