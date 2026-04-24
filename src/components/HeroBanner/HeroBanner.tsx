@@ -184,9 +184,35 @@ export default function HeroBanner() {
   const [loaded, setLoaded] = useState(false);
   const [showLoader, setShowLoader] = useState(true);
   const heroRef = useRef<HTMLDivElement>(null);
+  const fwdRef = useRef<HTMLVideoElement>(null);
+  const revRef = useRef<HTMLVideoElement>(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
   const titleY = useTransform(scrollYProgress, [0, 1], [0, 150]);
   const titleOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
+
+  // Ping-pong: forward video ends → play reverse video, and vice versa
+  useEffect(() => {
+    const fwd = fwdRef.current;
+    const rev = revRef.current;
+    if (!fwd || !rev) return;
+
+    const swap = (hide: HTMLVideoElement, show: HTMLVideoElement) => {
+      hide.style.opacity = '0';
+      show.currentTime = 0;
+      show.style.opacity = '0.6';
+      void show.play();
+    };
+
+    const onFwdEnded = () => swap(fwd, rev);
+    const onRevEnded = () => swap(rev, fwd);
+
+    fwd.addEventListener('ended', onFwdEnded);
+    rev.addEventListener('ended', onRevEnded);
+    return () => {
+      fwd.removeEventListener('ended', onFwdEnded);
+      rev.removeEventListener('ended', onRevEnded);
+    };
+  }, []);
 
   // Skip loader if returning to page (already in session)
   useEffect(() => {
@@ -265,17 +291,28 @@ export default function HeroBanner() {
             />
           ))}
 
-          {/* Smoke video background */}
+          {/* Smoke video — ping-pong between forward and pre-encoded reverse */}
           <div className="absolute inset-0 pointer-events-none z-[1] overflow-hidden">
             <video
+              ref={fwdRef}
               autoPlay
-              loop
               muted
               playsInline
-              className="absolute inset-0 w-full h-full object-cover opacity-60"
-              style={{ mixBlendMode: 'screen' }}
+              preload="auto"
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ mixBlendMode: 'screen', opacity: 0.6 }}
             >
               <source src="/videos/smoke.mp4" type="video/mp4" />
+            </video>
+            <video
+              ref={revRef}
+              muted
+              playsInline
+              preload="auto"
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ mixBlendMode: 'screen', opacity: 0 }}
+            >
+              <source src="/videos/smoke-reverse.mp4" type="video/mp4" />
             </video>
           </div>
 
