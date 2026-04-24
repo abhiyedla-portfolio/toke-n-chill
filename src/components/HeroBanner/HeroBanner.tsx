@@ -184,9 +184,83 @@ export default function HeroBanner() {
   const [loaded, setLoaded] = useState(false);
   const [showLoader, setShowLoader] = useState(true);
   const heroRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
   const titleY = useTransform(scrollYProgress, [0, 1], [0, 150]);
   const titleOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
+
+  // Ping-pong smoke: capture frames on forward play, draw in reverse via canvas
+  useEffect(() => {
+    const v = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!v || !canvas) return;
+
+    const W = 640;
+    const H = 360;
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d')!;
+
+    const frames: ImageBitmap[] = [];
+    let rafId = 0;
+    const CAPTURE_MS = 1000 / 15;
+    let lastCapture = 0;
+
+    const renderForward = (ts: number) => {
+      if (v.ended) return;
+      if (v.readyState >= 2) {
+        ctx.drawImage(v, 0, 0, W, H);
+        if (ts - lastCapture >= CAPTURE_MS) {
+          lastCapture = ts;
+          createImageBitmap(v).then((bmp) => frames.push(bmp));
+        }
+      }
+      rafId = requestAnimationFrame(renderForward);
+    };
+
+    const onPlay = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(renderForward);
+    };
+
+    const onEnded = () => {
+      cancelAnimationFrame(rafId);
+      let idx = frames.length - 1;
+      let lastTs = 0;
+      const STEP_MS = 1000 / 15;
+
+      const renderReverse = (ts: number) => {
+        if (!lastTs) lastTs = ts;
+        if (ts - lastTs >= STEP_MS) {
+          if (idx < 0) {
+            frames.forEach((f) => f.close());
+            frames.length = 0;
+            lastCapture = 0;
+            v.currentTime = 0;
+            void v.play();
+            return;
+          }
+          ctx.drawImage(frames[idx], 0, 0, W, H);
+          idx--;
+          lastTs = ts;
+        }
+        rafId = requestAnimationFrame(renderReverse);
+      };
+
+      rafId = requestAnimationFrame(renderReverse);
+    };
+
+    v.addEventListener('play', onPlay);
+    v.addEventListener('ended', onEnded);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      v.removeEventListener('play', onPlay);
+      v.removeEventListener('ended', onEnded);
+      frames.forEach((f) => f.close());
+    };
+  }, []);
 
   // Skip loader if returning to page (already in session)
   useEffect(() => {
@@ -265,18 +339,22 @@ export default function HeroBanner() {
             />
           ))}
 
-          {/* Smoke video background — loops forever */}
+          {/* Smoke video — hidden source; canvas renders forward then reverse without stutter */}
           <div className="absolute inset-0 pointer-events-none z-[1] overflow-hidden">
             <video
+              ref={videoRef}
               autoPlay
-              loop
               muted
               playsInline
-              className="absolute inset-0 w-full h-full object-cover opacity-60"
-              style={{ mixBlendMode: 'screen' }}
+              className="hidden"
             >
               <source src="/videos/smoke.mp4" type="video/mp4" />
             </video>
+            <canvas
+              ref={canvasRef}
+              className="absolute inset-0 w-full h-full opacity-60"
+              style={{ mixBlendMode: 'screen' }}
+            />
           </div>
 
           <motion.div
