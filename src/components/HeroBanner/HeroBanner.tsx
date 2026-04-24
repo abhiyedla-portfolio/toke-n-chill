@@ -184,42 +184,9 @@ export default function HeroBanner() {
   const [loaded, setLoaded] = useState(false);
   const [showLoader, setShowLoader] = useState(true);
   const heroRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const directionRef = useRef<'forward' | 'backward'>('forward');
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
   const titleY = useTransform(scrollYProgress, [0, 1], [0, 150]);
   const titleOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
-
-  // Ping-pong video: play forward, then seek backward using 'seeked' event
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-
-    const STEP = 0.066; // ~15fps backward (larger steps = smoother seeking)
-
-    const onSeeked = () => {
-      if (directionRef.current !== 'backward') return;
-      if (v.currentTime <= 0.1) {
-        directionRef.current = 'forward';
-        v.play();
-        return;
-      }
-      v.currentTime = Math.max(0, v.currentTime - STEP);
-    };
-
-    const onEnded = () => {
-      directionRef.current = 'backward';
-      v.pause();
-      v.currentTime = Math.max(0, v.currentTime - STEP);
-    };
-
-    v.addEventListener('ended', onEnded);
-    v.addEventListener('seeked', onSeeked);
-    return () => {
-      v.removeEventListener('ended', onEnded);
-      v.removeEventListener('seeked', onSeeked);
-    };
-  }, []);
 
   // Skip loader if returning to page (already in session)
   useEffect(() => {
@@ -301,8 +268,8 @@ export default function HeroBanner() {
           {/* Smoke video background — loops forever */}
           <div className="absolute inset-0 pointer-events-none z-[1] overflow-hidden">
             <video
-              ref={videoRef}
               autoPlay
+              loop
               muted
               playsInline
               className="absolute inset-0 w-full h-full object-cover opacity-60"
