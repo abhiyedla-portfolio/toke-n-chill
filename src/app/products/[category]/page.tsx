@@ -28,6 +28,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     <CategoryPageClient
       categoryName={categoryInfo.name}
       categoryDescription={categoryInfo.description}
+      categorySlug={category}
       products={products}
     />
   );

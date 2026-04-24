@@ -1,5 +1,4 @@
 import { notFound } from 'next/navigation';
-import { products as staticProducts } from '@/data/products';
 import { categories } from '@/config/categories';
 import { getProductBySlug, getProductsByCategory } from '@/lib/products-service';
 import ProductDetailClient from './ProductDetailClient';
@@ -9,13 +8,6 @@ export const dynamicParams = true;
 
 interface ProductPageProps {
   params: Promise<{ category: string; slug: string }>;
-}
-
-export function generateStaticParams() {
-  return staticProducts.map((p) => ({
-    category: p.category,
-    slug: p.slug,
-  }));
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {

@@ -41,15 +41,39 @@ export const cloverCategoryMap: Record<string, string> = {
   'chargers': 'accessories',
 
   // CBD & Delta
-  'cbd': 'cbd-delta',
-  'cbd & delta': 'cbd-delta',
-  'delta': 'cbd-delta',
-  'delta-8': 'cbd-delta',
-  'delta-9': 'cbd-delta',
-  'delta 8': 'cbd-delta',
-  'delta 9': 'cbd-delta',
-  'hemp': 'cbd-delta',
-  'gummies': 'cbd-delta',
+  'cbd': 'cbd',
+  'cbd & delta': 'cbd',
+  'delta': 'gummies',
+  'delta-8': 'gummies',
+  'delta-9': 'gummies',
+  'delta 8': 'gummies',
+  'delta 9': 'gummies',
+  'hemp': 'cbd',
+  'gummies': 'gummies',
+
+  // THCA & hemp flower
+  'thca': 'thca',
+  'thca flower': 'thca-flower',
+  'flower': 'thca-flower',
+
+  // Kratom
+  'kratom': 'kratom',
+  'kratom shots': 'kratom',
+  'kratom extracts': 'kratom',
+
+  // Hookah
+  'hookah': 'hookah',
+  'shisha': 'hookah',
+
+  // Tobacco
+  'tobacco': 'tobacco',
+  'cigars': 'tobacco',
+  'cigarettes': 'tobacco',
+
+  // Papers and wraps
+  'wraps': 'prerolls',
+  'papers': 'prerolls',
+  'cones': 'prerolls',
 };
 
 /** Default category for unmapped Clover items */

@@ -2,20 +2,29 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useCatalog } from '@/components/CatalogProvider';
 import type { Product } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 
 interface CategoryPageClientProps {
   categoryName: string;
   categoryDescription: string;
+  categorySlug: string;
   products: Product[];
 }
 
 export default function CategoryPageClient({
   categoryName,
   categoryDescription,
+  categorySlug,
   products,
 }: CategoryPageClientProps) {
+  const { products: liveProducts } = useCatalog();
+  const productsToRender =
+    liveProducts.length > 0
+      ? liveProducts.filter((product) => product.category === categorySlug)
+      : products;
+
   return (
     <motion.main
       className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8"
@@ -38,7 +47,7 @@ export default function CategoryPageClient({
         {categoryDescription}
       </p>
 
-      <ProductGrid products={products} showFilters />
+      <ProductGrid products={productsToRender} showFilters />
     </motion.main>
   );
 }

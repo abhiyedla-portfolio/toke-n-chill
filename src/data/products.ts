@@ -1,24 +1,10 @@
-export interface Product {
-  id: string;
-  slug: string;
-  name: string;
-  brand: string;
-  category: string;
-  description: string;
-  priceRange: string;
-  image: string;
-  variants?: string[];
-  featured?: boolean;
-  newArrival?: boolean;
-  // Clover POS integration fields
-  cloverId?: string;
-  price?: number;         // price in cents
-  inStock?: boolean;
-  stockQuantity?: number;
-}
+import type { Product } from '@/types/catalog';
+import { sanitizeProduct } from '@/lib/catalog-utils';
 
 // Import real inventory from Modisoft export
 import { inventoryProducts } from './inventory';
+
+export type { Product } from '@/types/catalog';
 
 // Mark some products as featured for the home page
 const featuredSlugs = new Set([
@@ -33,9 +19,9 @@ const featuredSlugs = new Set([
   'hometown-hero-live-resin-5g-g13',
 ]);
 
-export const products: Product[] = inventoryProducts.map((p) => ({
-  ...p,
-  featured: featuredSlugs.has(p.slug),
+export const products: Product[] = inventoryProducts.map((product) => sanitizeProduct({
+  ...product,
+  featured: featuredSlugs.has(product.slug),
 }));
 
 export function getProductsByCategory(category: string): Product[] {

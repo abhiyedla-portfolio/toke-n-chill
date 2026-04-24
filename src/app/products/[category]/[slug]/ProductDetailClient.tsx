@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Package, Phone, MapPin } from 'lucide-react';
 import { useBrand } from '@/components/BrandProvider';
+import { useCatalog } from '@/components/CatalogProvider';
 import NicotineWarning from '@/components/NicotineWarning';
 import ProductCard from '@/components/ProductCard';
 import { StockBadge } from '@/components/StockBadge';
+import { getRelatedCatalogProducts } from '@/lib/catalog-utils';
 import type { Product } from '@/data/products';
 
 interface ProductDetailClientProps {
@@ -21,14 +23,21 @@ export default function ProductDetailClient({
   relatedProducts,
 }: ProductDetailClientProps) {
   const brand = useBrand();
+  const { products: liveProducts } = useCatalog();
+  const liveProduct = liveProducts.find((candidate) => candidate.slug === product.slug);
+  const currentProduct = liveProduct ?? product;
+  const relatedProductsToRender =
+    liveProduct && liveProducts.length > 0
+      ? getRelatedCatalogProducts(liveProducts, liveProduct)
+      : relatedProducts;
 
   const hasRealImage =
-    product.image && product.image !== '/images/products/placeholder.jpg';
+    currentProduct.image && currentProduct.image !== '/images/products/placeholder.jpg';
 
   const ctaText =
-    product.inStock === false
+    currentProduct.inStock === false
       ? 'Call to Check Availability'
-      : product.inStock === true
+      : currentProduct.inStock === true
         ? 'In Stock — Visit Us Today!'
         : 'Available In Store Only';
 
@@ -45,11 +54,11 @@ export default function ProductDetailClient({
         <span className="mx-2">/</span>
         <Link href="/products" className="hover:underline" style={{ color: '#FF2D7B' }}>Products</Link>
         <span className="mx-2">/</span>
-        <Link href={`/products/${product.category}`} className="hover:underline" style={{ color: '#FF2D7B' }}>
+        <Link href={`/products/${currentProduct.category}`} className="hover:underline" style={{ color: '#FF2D7B' }}>
           {categoryName}
         </Link>
         <span className="mx-2">/</span>
-        <span className="text-white">{product.name}</span>
+        <span className="text-white">{currentProduct.name}</span>
       </nav>
 
       <div className="mb-8">
@@ -65,7 +74,7 @@ export default function ProductDetailClient({
         >
           {hasRealImage ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+            <img src={currentProduct.image} alt={currentProduct.name} className="h-full w-full object-cover" />
           ) : (
             <Package className="h-24 w-24" style={{ color: '#333' }} />
           )}
@@ -74,33 +83,36 @@ export default function ProductDetailClient({
         {/* Details */}
         <div className="flex flex-col gap-4">
           <span className="text-xs font-bold uppercase tracking-widest" style={{ color: '#888' }}>
-            {product.brand}
+            {currentProduct.brand}
           </span>
 
           <h1 className="font-display text-4xl font-bold uppercase tracking-wide text-white lg:text-5xl">
-            {product.name}
+            {currentProduct.name}
           </h1>
 
-          <p className="text-2xl font-bold" style={{ color: '#FF2D7B' }}>
-            {product.priceRange}
+          <p className="text-sm font-bold uppercase tracking-[0.2em]" style={{ color: '#FF2D7B' }}>
+            Live Inventory
+          </p>
+          <p className="text-sm" style={{ color: '#888' }}>
+            Prices are available in store only. Call ahead for current pricing and availability.
           </p>
 
-          <StockBadge inStock={product.inStock} stockQuantity={product.stockQuantity} size="md" />
+          <StockBadge inStock={currentProduct.inStock} stockQuantity={currentProduct.stockQuantity} size="md" />
 
-          {product.description && (
+          {currentProduct.description && (
             <p className="text-base leading-relaxed" style={{ color: '#888' }}>
-              {product.description}
+              {currentProduct.description}
             </p>
           )}
 
           {/* Variants */}
-          {product.variants && product.variants.length > 0 && (
+          {currentProduct.variants && currentProduct.variants.length > 0 && (
             <div>
               <h3 className="mb-2 text-xs font-bold uppercase tracking-widest" style={{ color: '#888' }}>
                 Available Variants
               </h3>
               <div className="flex flex-wrap gap-2">
-                {product.variants.map((variant) => (
+                {currentProduct.variants.map((variant) => (
                   <span
                     key={variant}
                     className="rounded border px-3 py-1 text-sm font-medium text-white transition-colors hover:border-[#FF2D7B]"
@@ -125,7 +137,7 @@ export default function ProductDetailClient({
               </h3>
             </div>
             <p className="mb-4 text-sm" style={{ color: '#888' }}>
-              {product.inStock === false
+              {currentProduct.inStock === false
                 ? 'This item may be temporarily out of stock. Call to confirm before visiting.'
                 : 'Call ahead to check availability and reserve your product.'}
             </p>
@@ -142,13 +154,13 @@ export default function ProductDetailClient({
       </div>
 
       {/* Related products */}
-      {relatedProducts.length > 0 && (
+      {relatedProductsToRender.length > 0 && (
         <section className="mt-16">
           <h2 className="mb-6 font-display text-3xl font-bold uppercase tracking-wide text-white">
             More in {categoryName}
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {relatedProducts.map((p) => (
+            {relatedProductsToRender.map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}
           </div>

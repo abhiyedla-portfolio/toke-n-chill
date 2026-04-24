@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { categories } from '@/config/categories';
+import { useCatalog } from '@/components/CatalogProvider';
 import type { Product } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 
@@ -13,11 +14,13 @@ interface ProductsPageClientProps {
 
 export default function ProductsPageClient({ products }: ProductsPageClientProps) {
   const [activeCategory, setActiveCategory] = useState<string>('all');
+  const { products: liveProducts } = useCatalog();
+  const allProducts = liveProducts.length > 0 ? liveProducts : products;
 
   const filtered = useMemo(() => {
-    if (activeCategory === 'all') return products;
-    return products.filter((p) => p.category === activeCategory);
-  }, [activeCategory, products]);
+    if (activeCategory === 'all') return allProducts;
+    return allProducts.filter((p) => p.category === activeCategory);
+  }, [activeCategory, allProducts]);
 
   return (
     <motion.main
