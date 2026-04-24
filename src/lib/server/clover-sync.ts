@@ -164,7 +164,7 @@ function buildInsertStatement(
     0,
     stockQuantity > 0 ? 1 : 0,
     stockQuantity,
-    item.available !== false ? 1 : 0,
+    !item.hidden && item.available !== false ? 1 : 0,
     item.itemStock?.modifiedTime ?? item.modifiedTime ?? Date.now(),
     syncedAt,
   );
@@ -190,7 +190,7 @@ function buildUpdateStatement(
     parseTagFlag(item, ['new', 'new arrival']) ? 1 : 0,
     stockQuantity > 0 ? 1 : 0,
     stockQuantity,
-    item.available !== false ? 1 : 0,
+    !item.hidden && item.available !== false ? 1 : 0,
     item.itemStock?.modifiedTime ?? item.modifiedTime ?? Date.now(),
     syncedAt,
     rowSlug,
