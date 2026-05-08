@@ -10,7 +10,6 @@ import Footer from '@/components/Footer/Footer';
 import { CookieBanner } from '@/components/CookieBanner';
 import { LocalBusinessSchema } from '@/components/LocalBusinessSchema';
 import SmokeParticles from '@/components/SmokeParticles/SmokeParticles';
-import GlowCursor from '@/components/GlowCursor/GlowCursor';
 
 const playfairDisplay = Playfair_Display({
   subsets: ['latin'],
@@ -79,8 +78,7 @@ export default function RootLayout({
           <CatalogProvider>
             <AgeGate />
             <SmokeParticles />
-            <GlowCursor />
-            <Navbar />
+<Navbar />
             <main className="relative min-h-screen">{children}</main>
             <Footer />
             <CookieBanner />
