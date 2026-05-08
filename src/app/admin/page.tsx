@@ -213,6 +213,7 @@ export default function AdminDashboard() {
   const [filterBrand, setFilterBrand] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterFound, setFilterFound] = useState('');
+  const [filterNote, setFilterNote] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('stock');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [groupBy, setGroupBy] = useState<GroupKey>('none');
@@ -234,7 +235,7 @@ export default function AdminDashboard() {
   useEffect(() => { load(); }, [load]);
 
   // Reset to page 1 whenever filters/sort/tab/pageSize change
-  useEffect(() => { setCurrentPage(1); }, [search, filterCategory, filterBrand, filterStatus, filterFound, sortKey, sortDir, activeTab, pageSize, groupBy]);
+  useEffect(() => { setCurrentPage(1); }, [search, filterCategory, filterBrand, filterStatus, filterFound, filterNote, sortKey, sortDir, activeTab, pageSize, groupBy]);
 
   // ── Actions ──
 
@@ -360,8 +361,10 @@ export default function AdminDashboard() {
     if (filterStatus) list = list.filter((i) => i.status === filterStatus);
     if (filterFound === 'found') list = list.filter((i) => i.foundInStore);
     if (filterFound === 'notfound') list = list.filter((i) => !i.foundInStore);
+    if (filterNote === 'has') list = list.filter((i) => (i.note ?? '').trim().length > 0);
+    if (filterNote === 'none') list = list.filter((i) => !(i.note ?? '').trim());
     return list;
-  }, [baseItems, search, filterCategory, filterBrand, filterStatus, filterFound]);
+  }, [baseItems, search, filterCategory, filterBrand, filterStatus, filterFound, filterNote]);
 
   const sorted = useMemo(() => {
     const statusOrder = { critical: 0, 'at-risk': 1, ok: 2 };
@@ -409,6 +412,15 @@ export default function AdminDashboard() {
   );
   const criticalCount = allItems.filter((i) => !i.excluded && i.status === 'critical').length;
   const atRiskCount = allItems.filter((i) => !i.excluded && i.status === 'at-risk').length;
+  const withNotesCount = allItems.filter((i) => !i.excluded && (i.note ?? '').trim().length > 0).length;
+  const activeFilterCount =
+    (search ? 1 : 0) +
+    (filterCategory ? 1 : 0) +
+    (filterBrand ? 1 : 0) +
+    (filterStatus ? 1 : 0) +
+    (filterFound ? 1 : 0) +
+    (filterNote ? 1 : 0) +
+    (groupBy !== 'none' ? 1 : 0);
 
   // ── Styles ──
 
@@ -417,8 +429,27 @@ export default function AdminDashboard() {
     header: { background: '#1e293b', borderBottom: '1px solid #334155', padding: '0 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '58px', position: 'sticky' as const, top: 0, zIndex: 10 },
     btn: (bg: string, pad = '7px 14px'): React.CSSProperties => ({ background: bg, border: 'none', borderRadius: '7px', color: '#fff', fontWeight: 600, fontSize: '12px', padding: pad, cursor: 'pointer', whiteSpace: 'nowrap' as const }),
     ghostBtn: (): React.CSSProperties => ({ background: 'transparent', border: '1px solid #334155', borderRadius: '7px', color: '#94a3b8', fontWeight: 600, fontSize: '12px', padding: '6px 12px', cursor: 'pointer' }),
-    select: (): React.CSSProperties => ({ background: '#1e293b', border: '1px solid #334155', borderRadius: '7px', color: '#e2e8f0', fontSize: '12px', padding: '6px 10px', outline: 'none', cursor: 'pointer' }),
-    input: (): React.CSSProperties => ({ background: '#1e293b', border: '1px solid #334155', borderRadius: '7px', color: '#e2e8f0', fontSize: '12px', padding: '6px 10px', outline: 'none', width: '200px' }),
+    select: (active = false): React.CSSProperties => ({
+      background: active ? '#312e81' : '#1e293b',
+      border: `1px solid ${active ? '#7c3aed' : '#334155'}`,
+      borderRadius: '7px',
+      color: active ? '#ddd6fe' : '#e2e8f0',
+      fontSize: '12px',
+      padding: '6px 10px',
+      outline: 'none',
+      cursor: 'pointer',
+      fontWeight: active ? 600 : 400,
+    }),
+    input: (active = false): React.CSSProperties => ({
+      background: active ? '#312e81' : '#1e293b',
+      border: `1px solid ${active ? '#7c3aed' : '#334155'}`,
+      borderRadius: '7px',
+      color: active ? '#ddd6fe' : '#e2e8f0',
+      fontSize: '12px',
+      padding: '6px 10px',
+      outline: 'none',
+      width: '220px',
+    }),
     th: (clickable = false): React.CSSProperties => ({ padding: '9px 12px', textAlign: 'left' as const, fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.5px', color: '#64748b', borderBottom: '2px solid #334155', cursor: clickable ? 'pointer' : 'default', userSelect: 'none' as const, whiteSpace: 'nowrap' as const }),
     td: (extra?: React.CSSProperties): React.CSSProperties => ({ padding: '10px 12px', borderBottom: '1px solid #1e293b', verticalAlign: 'top' as const, ...extra }),
   };
@@ -467,17 +498,26 @@ export default function AdminDashboard() {
         )}
 
         {/* ── Summary cards ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px' }}>
           {[
-            { label: 'Total Items', value: allItems.length, color: '#f8fafc', border: '#334155' },
-            { label: '⚠ Critical Low', value: criticalCount, color: '#fbbf24', border: '#92400e' },
-            { label: '◎ Sold & Low', value: atRiskCount, color: '#818cf8', border: '#3730a3' },
-            { label: '⛔ Excluded', value: activeExclusions.length, color: '#60a5fa', border: '#1e3a5f' },
-          ].map(({ label, value, color, border }) => (
-            <div key={label} style={{ background: '#1e293b', borderRadius: '10px', border: `1px solid ${border}`, padding: '16px 20px', textAlign: 'center' }}>
+            { label: 'Total Items', value: allItems.length, color: '#f8fafc', border: '#334155', onClick: () => { setTab('all'); setSearch(''); setFilterCategory(''); setFilterBrand(''); setFilterStatus(''); setFilterFound(''); setFilterNote(''); } },
+            { label: '⚠ Critical Low', value: criticalCount, color: '#fbbf24', border: '#92400e', onClick: () => { setTab('all'); setFilterStatus('critical'); } },
+            { label: '◎ Sold & Low', value: atRiskCount, color: '#818cf8', border: '#3730a3', onClick: () => { setTab('all'); setFilterStatus('at-risk'); } },
+            { label: '📝 With Notes', value: withNotesCount, color: '#a78bfa', border: '#5b21b6', onClick: () => { setTab('all'); setFilterNote('has'); } },
+            { label: '⛔ Excluded', value: activeExclusions.length, color: '#60a5fa', border: '#1e3a5f', onClick: () => setTab('excluded') },
+          ].map(({ label, value, color, border, onClick }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={onClick}
+              title={`Click to view: ${label}`}
+              style={{ background: '#1e293b', borderRadius: '10px', border: `1px solid ${border}`, padding: '16px 20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.1s, border-color 0.1s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = color; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = border; }}
+            >
               <div style={{ fontSize: '28px', fontWeight: 800, color }}>{value}</div>
               <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px' }}>{label}</div>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -569,41 +609,54 @@ export default function AdminDashboard() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="🔍 Search name, brand, note…"
-                style={S.input()}
+                style={S.input(!!search)}
               />
 
-              <select value={filterCategory} onChange={(e) => { setFilterCategory(e.target.value); setFilterBrand(''); }} style={S.select()}>
+              <select value={filterCategory} onChange={(e) => { setFilterCategory(e.target.value); setFilterBrand(''); }} style={S.select(!!filterCategory)}>
                 <option value="">All Categories</option>
                 {categories.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
 
-              <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} style={S.select()}>
+              <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} style={S.select(!!filterBrand)}>
                 <option value="">All Brands</option>
                 {brands.map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
 
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={S.select()}>
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={S.select(!!filterStatus)}>
                 <option value="">All Statuses</option>
                 <option value="critical">⚠ Critical</option>
                 <option value="at-risk">◎ Watch</option>
                 <option value="ok">✅ OK</option>
               </select>
 
-              <select value={filterFound} onChange={(e) => setFilterFound(e.target.value)} style={S.select()}>
+              <select value={filterFound} onChange={(e) => setFilterFound(e.target.value)} style={S.select(!!filterFound)}>
                 <option value="">All Found Status</option>
                 <option value="found">✓ Found in Store</option>
                 <option value="notfound">Not Verified</option>
               </select>
 
-              <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupKey)} style={S.select()} title="Group rows by">
+              <select value={filterNote} onChange={(e) => setFilterNote(e.target.value)} style={S.select(!!filterNote)} title="Filter by notes">
+                <option value="">All Notes</option>
+                <option value="has">📝 Has note</option>
+                <option value="none">No note</option>
+              </select>
+
+              {/* Visual divider — content filters above, view modifiers below */}
+              <span aria-hidden style={{ width: '1px', height: '20px', background: '#334155', margin: '0 4px' }} />
+
+              <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupKey)} style={S.select(groupBy !== 'none')} title="Group rows by">
                 {(Object.keys(GROUP_LABELS) as GroupKey[]).map((k) => (
                   <option key={k} value={k}>{k === 'none' ? GROUP_LABELS[k] : `Group: ${GROUP_LABELS[k]}`}</option>
                 ))}
               </select>
 
-              {(search || filterCategory || filterBrand || filterStatus || filterFound || groupBy !== 'none') && (
-                <button onClick={() => { setSearch(''); setFilterCategory(''); setFilterBrand(''); setFilterStatus(''); setFilterFound(''); setGroupBy('none'); }} style={S.ghostBtn()}>
-                  ✕ Clear
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={() => { setSearch(''); setFilterCategory(''); setFilterBrand(''); setFilterStatus(''); setFilterFound(''); setFilterNote(''); setGroupBy('none'); }}
+                  style={{ ...S.btn('#7c2d12', '6px 12px'), border: '1px solid #9a3412' }}
+                  title={`Reset ${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`}
+                >
+                  ✕ Clear ({activeFilterCount})
                 </button>
               )}
 
