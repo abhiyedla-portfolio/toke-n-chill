@@ -1,0 +1,310 @@
+--- a/src/app/admin/page.tsx
++++ b/src/app/admin/page.tsx
+@@ -38,6 +38,15 @@
+ type SortKey = 'name' | 'stock' | 'sold' | 'category' | 'brand';
+ type SortDir = 'asc' | 'desc';
+ type TabId = 'lowstock' | 'all' | 'excluded';
++type GroupKey = 'none' | 'category' | 'brand' | 'letter' | 'name';
++
++const GROUP_LABELS: Record<GroupKey, string> = {
++  none: 'No grouping',
++  category: 'Category',
++  brand: 'Brand',
++  name: 'Name (full)',
++  letter: 'First letter',
++};
+ 
+ const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 500] as const;
+ type PageSize = typeof PAGE_SIZE_OPTIONS[number];
+@@ -206,6 +215,7 @@
+   const [filterFound, setFilterFound] = useState('');
+   const [sortKey, setSortKey] = useState<SortKey>('stock');
+   const [sortDir, setSortDir] = useState<SortDir>('asc');
++  const [groupBy, setGroupBy] = useState<GroupKey>('none');
+   const [pageSize, setPageSize] = useState<PageSize>(50);
+   const [currentPage, setCurrentPage] = useState(1);
+ 
+@@ -224,7 +234,7 @@
+   useEffect(() => { load(); }, [load]);
+ 
+   // Reset to page 1 whenever filters/sort/tab/pageSize change
+-  useEffect(() => { setCurrentPage(1); }, [search, filterCategory, filterBrand, filterStatus, filterFound, sortKey, sortDir, activeTab, pageSize]);
++  useEffect(() => { setCurrentPage(1); }, [search, filterCategory, filterBrand, filterStatus, filterFound, sortKey, sortDir, activeTab, pageSize, groupBy]);
+ 
+   // ── Actions ──
+ 
+@@ -368,12 +378,29 @@
+     });
+   }, [filtered, sortKey, sortDir]);
+ 
+-  // Pagination slice
++  // Pagination slice — only used when grouping is off
+   const totalPages = Math.ceil(sorted.length / pageSize);
+   const safePage = Math.min(currentPage, Math.max(1, totalPages));
+   const paginatedItems = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
+   const pageStart = sorted.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+   const pageEnd = Math.min(safePage * pageSize, sorted.length);
++
++  // Group items by the selected key (preserves the existing sort order within each group)
++  const groups = useMemo<Array<[string, Item[]]>>(() => {
++    if (groupBy === 'none') return [['', sorted]];
++    const map = new Map<string, Item[]>();
++    for (const item of sorted) {
++      let key = '';
++      if (groupBy === 'category') key = item.category || '— Uncategorized —';
++      else if (groupBy === 'brand') key = item.brand || '— No brand —';
++      else if (groupBy === 'name') key = item.name || '—';
++      else if (groupBy === 'letter') key = (item.name?.[0] ?? '#').toUpperCase();
++      const arr = map.get(key) ?? [];
++      arr.push(item);
++      map.set(key, arr);
++    }
++    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
++  }, [sorted, groupBy]);
+ 
+   const exclusions = data?.exclusions ?? [];
+   const nowIso = new Date().toISOString();
+@@ -568,24 +595,36 @@
+                 <option value="notfound">Not Verified</option>
+               </select>
+ 
+-              {(search || filterCategory || filterBrand || filterStatus || filterFound) && (
+-                <button onClick={() => { setSearch(''); setFilterCategory(''); setFilterBrand(''); setFilterStatus(''); setFilterFound(''); }} style={S.ghostBtn()}>
++              <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupKey)} style={S.select()} title="Group rows by">
++                {(Object.keys(GROUP_LABELS) as GroupKey[]).map((k) => (
++                  <option key={k} value={k}>{k === 'none' ? GROUP_LABELS[k] : `Group: ${GROUP_LABELS[k]}`}</option>
++                ))}
++              </select>
++
++              {(search || filterCategory || filterBrand || filterStatus || filterFound || groupBy !== 'none') && (
++                <button onClick={() => { setSearch(''); setFilterCategory(''); setFilterBrand(''); setFilterStatus(''); setFilterFound(''); setGroupBy('none'); }} style={S.ghostBtn()}>
+                   ✕ Clear
+                 </button>
+               )}
+ 
+               <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                 <span style={{ fontSize: '11px', color: '#475569', fontWeight: 600 }}>
+-                  {sorted.length > 0 ? `${pageStart}–${pageEnd} of ${sorted.length}` : '0 items'}
++                  {sorted.length === 0
++                    ? '0 items'
++                    : groupBy !== 'none'
++                      ? `${sorted.length} items · ${groups.length} group${groups.length === 1 ? '' : 's'}`
++                      : `${pageStart}–${pageEnd} of ${sorted.length}`}
+                 </span>
+-                <select
+-                  value={pageSize}
+-                  onChange={(e) => setPageSize(Number(e.target.value) as PageSize)}
+-                  style={{ ...S.select(), fontSize: '11px' }}
+-                  title="Items per page"
+-                >
+-                  {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n} / page</option>)}
+-                </select>
++                {groupBy === 'none' && (
++                  <select
++                    value={pageSize}
++                    onChange={(e) => setPageSize(Number(e.target.value) as PageSize)}
++                    style={{ ...S.select(), fontSize: '11px' }}
++                    title="Items per page"
++                  >
++                    {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n} / page</option>)}
++                  </select>
++                )}
+               </div>
+             </div>
+ 
+@@ -610,98 +649,109 @@
+                     </tr>
+                   </thead>
+                   <tbody>
+-                    {paginatedItems.map((item) => {
+-                      const busy = busyIds.has(item.cloverId);
+-                      // Row background: subtle tints — amber for critical, indigo for at-risk, green for found
+-                      const rowBg = item.foundInStore
+-                        ? '#071a0d'
+-                        : item.status === 'critical'
+-                          ? '#1c1400'
+-                          : item.status === 'at-risk'
+-                            ? '#0e0d1f'
+-                            : 'transparent';
++                    {(() => {
++                      const renderRow = (item: Item) => {
++                        const busy = busyIds.has(item.cloverId);
++                        const rowBg = item.foundInStore
++                          ? '#071a0d'
++                          : item.status === 'critical'
++                            ? '#1c1400'
++                            : item.status === 'at-risk'
++                              ? '#0e0d1f'
++                              : 'transparent';
+ 
+-                      return (
+-                        <tr key={item.cloverId} style={{ background: rowBg, borderBottom: '1px solid #1e293b' }}>
+-                          {/* Item name + status badge */}
+-                          <td style={S.td()}>
+-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' as const }}>
+-                              <span style={{ color: '#e2e8f0', fontWeight: item.status !== 'ok' ? 600 : 400 }}>
+-                                {item.name}
+-                              </span>
+-                              {item.status === 'critical' && badge('#92400e', 'LOW', '#fcd34d')}
+-                              {item.status === 'at-risk' && badge('#312e81', 'WATCH', '#a5b4fc')}
+-                            </div>
+-                          </td>
+-                          {/* Category */}
+-                          <td style={S.td({ color: '#64748b', fontSize: '12px' })}>{item.category ?? '—'}</td>
+-                          {/* Brand */}
+-                          <td style={S.td({ color: '#64748b', fontSize: '12px' })}>{item.brand ?? '—'}</td>
+-                          {/* Stock */}
+-                          <td style={S.td({ textAlign: 'center' })}>
+-                            {item.stockQuantity <= 0
+-                              ? badge('#374151', 'OUT', '#d1d5db')
+-                              : item.status === 'critical'
+-                                ? badge('#92400e', String(item.stockQuantity), '#fcd34d')
+-                                : item.status === 'at-risk'
+-                                  ? badge('#312e81', String(item.stockQuantity), '#a5b4fc')
+-                                  : <span style={{ color: '#94a3b8' }}>{item.stockQuantity}</span>}
+-                          </td>
+-                          {/* Sold */}
+-                          <td style={S.td({ textAlign: 'center', color: item.unitsSold > 0 ? '#a78bfa' : '#334155', fontWeight: item.unitsSold > 0 ? 700 : 400 })}>
+-                            {item.unitsSold > 0 ? item.unitsSold : '—'}
+-                          </td>
+-                          {/* Note */}
+-                          <td style={S.td({ minWidth: '160px' })}>
+-                            <NoteCell item={item} onSaved={handleNoteSaved} />
+-                          </td>
+-                          {/* Found in store */}
+-                          <td style={S.td({ textAlign: 'center' })}>
+-                            <button
+-                              disabled={busy}
+-                              onClick={() => toggleFound(item)}
+-                              title={item.foundInStore ? `Found ${item.foundAt ? fmtDate(item.foundAt) : ''}` : 'Mark as found in store'}
+-                              style={{
+-                                background: item.foundInStore ? '#14532d' : '#1e293b',
+-                                border: `1px solid ${item.foundInStore ? '#16a34a' : '#334155'}`,
+-                                borderRadius: '7px',
+-                                color: item.foundInStore ? '#86efac' : '#64748b',
+-                                fontWeight: 700,
+-                                fontSize: '12px',
+-                                padding: '4px 10px',
+-                                cursor: 'pointer',
+-                                opacity: busy ? 0.5 : 1,
+-                              }}
+-                            >
+-                              {item.foundInStore ? '✓ Found' : '○ Check'}
+-                            </button>
+-                          </td>
+-                          {/* Actions */}
+-                          <td style={S.td({ textAlign: 'right' })}>
+-                            <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
+-                              <button disabled={busy} onClick={() => exclude(item, 'temporary')} style={{ ...S.btn('#1e3a5f', '5px 9px'), fontSize: '11px', opacity: busy ? 0.5 : 1 }}>
+-                                {busy ? '…' : '⏭ Skip'}
++                        return (
++                          <tr key={item.cloverId} style={{ background: rowBg, borderBottom: '1px solid #1e293b' }}>
++                            <td style={S.td()}>
++                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' as const }}>
++                                <span style={{ color: '#e2e8f0', fontWeight: item.status !== 'ok' ? 600 : 400 }}>
++                                  {item.name}
++                                </span>
++                                {item.status === 'critical' && badge('#92400e', 'LOW', '#fcd34d')}
++                                {item.status === 'at-risk' && badge('#312e81', 'WATCH', '#a5b4fc')}
++                              </div>
++                            </td>
++                            <td style={S.td({ color: '#64748b', fontSize: '12px' })}>{item.category ?? '—'}</td>
++                            <td style={S.td({ color: '#64748b', fontSize: '12px' })}>{item.brand ?? '—'}</td>
++                            <td style={S.td({ textAlign: 'center' })}>
++                              {item.stockQuantity <= 0
++                                ? badge('#374151', 'OUT', '#d1d5db')
++                                : item.status === 'critical'
++                                  ? badge('#92400e', String(item.stockQuantity), '#fcd34d')
++                                  : item.status === 'at-risk'
++                                    ? badge('#312e81', String(item.stockQuantity), '#a5b4fc')
++                                    : <span style={{ color: '#94a3b8' }}>{item.stockQuantity}</span>}
++                            </td>
++                            <td style={S.td({ textAlign: 'center', color: item.unitsSold > 0 ? '#a78bfa' : '#334155', fontWeight: item.unitsSold > 0 ? 700 : 400 })}>
++                              {item.unitsSold > 0 ? item.unitsSold : '—'}
++                            </td>
++                            <td style={S.td({ minWidth: '160px' })}>
++                              <NoteCell item={item} onSaved={handleNoteSaved} />
++                            </td>
++                            <td style={S.td({ textAlign: 'center' })}>
++                              <button
++                                disabled={busy}
++                                onClick={() => toggleFound(item)}
++                                title={item.foundInStore ? `Found ${item.foundAt ? fmtDate(item.foundAt) : ''}` : 'Mark as found in store'}
++                                style={{
++                                  background: item.foundInStore ? '#14532d' : '#1e293b',
++                                  border: `1px solid ${item.foundInStore ? '#16a34a' : '#334155'}`,
++                                  borderRadius: '7px',
++                                  color: item.foundInStore ? '#86efac' : '#64748b',
++                                  fontWeight: 700,
++                                  fontSize: '12px',
++                                  padding: '4px 10px',
++                                  cursor: 'pointer',
++                                  opacity: busy ? 0.5 : 1,
++                                }}
++                              >
++                                {item.foundInStore ? '✓ Found' : '○ Check'}
+                               </button>
+-                              <button disabled={busy} onClick={() => exclude(item, 'permanent')} style={{ ...S.btn('#374151', '5px 9px'), fontSize: '11px', opacity: busy ? 0.5 : 1 }}>
+-                                {busy ? '…' : '⛔ Remove'}
+-                              </button>
+-                            </div>
++                            </td>
++                            <td style={S.td({ textAlign: 'right' })}>
++                              <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
++                                <button disabled={busy} onClick={() => exclude(item, 'temporary')} style={{ ...S.btn('#1e3a5f', '5px 9px'), fontSize: '11px', opacity: busy ? 0.5 : 1 }}>
++                                  {busy ? '…' : '⏭ Skip'}
++                                </button>
++                                <button disabled={busy} onClick={() => exclude(item, 'permanent')} style={{ ...S.btn('#374151', '5px 9px'), fontSize: '11px', opacity: busy ? 0.5 : 1 }}>
++                                  {busy ? '…' : '⛔ Remove'}
++                                </button>
++                              </div>
++                            </td>
++                          </tr>
++                        );
++                      };
++
++                      if (groupBy === 'none') return paginatedItems.map(renderRow);
++
++                      return groups.flatMap(([groupKey, items]) => [
++                        <tr key={`__group_${groupKey}`} style={{ background: '#0c1426' }}>
++                          <td colSpan={8} style={{ padding: '10px 14px', borderTop: '1px solid #1e293b', borderBottom: '1px solid #1e293b' }}>
++                            <span style={{ fontSize: '11px', fontWeight: 800, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
++                              {groupKey}
++                            </span>
++                            <span style={{ marginLeft: '10px', fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
++                              {items.length} item{items.length === 1 ? '' : 's'}
++                            </span>
+                           </td>
+-                        </tr>
+-                      );
+-                    })}
++                        </tr>,
++                        ...items.map(renderRow),
++                      ]);
++                    })()}
+                   </tbody>
+                 </table>
+ 
+-                {/* ── Pagination ── */}
+-                <div style={{ borderTop: '1px solid #1e293b', padding: '4px 16px 12px' }}>
+-                  <Pagination
+-                    total={sorted.length}
+-                    pageSize={pageSize}
+-                    currentPage={safePage}
+-                    onPage={setCurrentPage}
+-                  />
+-                </div>
++                {/* ── Pagination (hidden when grouping is active — all groups render fully) ── */}
++                {groupBy === 'none' && (
++                  <div style={{ borderTop: '1px solid #1e293b', padding: '4px 16px 12px' }}>
++                    <Pagination
++                      total={sorted.length}
++                      pageSize={pageSize}
++                      currentPage={safePage}
++                      onPage={setCurrentPage}
++                    />
++                  </div>
++                )}
+               </div>
+             )}
+           </>
