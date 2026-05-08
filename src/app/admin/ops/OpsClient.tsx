@@ -61,7 +61,6 @@ interface OpsStatusResponse {
 
 // ── Helpers ───────────────────────────────────────────────────
 
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const STORE_LABELS: Record<string, string> = {
@@ -152,7 +151,7 @@ export default function OpsClient() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [status, setStatus] = useState<OpsStatusResponse | null>(null);
   const [alerts, setAlerts] = useState<OpsAlert[]>([]);
-  const [schedule, setSchedule] = useState<StoreSchedule[]>([]);
+  const [, setSchedule] = useState<StoreSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [scheduleSaving, setScheduleSaving] = useState(false);
@@ -314,7 +313,6 @@ function OverviewTab({ store, alerts }: { store: StoreStatus; alerts: OpsAlert[]
 
   // Derive current status
   const isOpen = !!ds?.first_order_at && !ds.closed_on_time;
-  const openedOnTime = ds?.opened_on_time === 1;
   const hasOrders = !!ds?.first_order_at;
 
   const storeColor = isOpen ? '#22c55e' : hasOrders ? '#f59e0b' : '#64748b';
@@ -509,7 +507,7 @@ function AlertsTab({ alerts, onRefresh }: { alerts: OpsAlert[]; onRefresh: () =>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {filtered.map((a) => <AlertRow key={a.id} alert={a} expanded />)}
+          {filtered.map((a) => <AlertRow key={a.id} alert={a} />)}
         </div>
       )}
     </div>
@@ -612,7 +610,7 @@ function KpiCard({ label, value, color, sub }: { label: string; value: string; c
   );
 }
 
-function AlertRow({ alert, expanded = false }: { alert: OpsAlert; expanded?: boolean }) {
+function AlertRow({ alert }: { alert: OpsAlert }) {
   const meta = ALERT_TYPE_META[alert.alert_type] ?? { emoji: '📢', label: alert.alert_type, color: '#94a3b8' };
   const [showFull, setShowFull] = useState(false);
 

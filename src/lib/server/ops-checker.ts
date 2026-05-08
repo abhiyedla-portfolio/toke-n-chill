@@ -94,7 +94,7 @@ async function checkStore(
   await checkOpenClose(db, storeId, dateCst, nowMs, todaySchedule.open_time, todaySchedule.close_time);
 
   // ── 3. Sync and check employee attendance ──────────────────
-  await syncAndCheckAttendance(db, storeId, dateCst, nowMs, startOfDayMs, endOfDayMs);
+  await syncAndCheckAttendance(db, storeId, dateCst, nowMs, startOfDayMs);
 }
 
 // ── Order sync (open/close detection) ────────────────────────
@@ -281,7 +281,6 @@ async function syncAndCheckAttendance(
   dateCst: string,
   nowMs: number,
   startOfDayMs: number,
-  endOfDayMs: number,
 ): Promise<void> {
   // Fetch latest shifts from Clover
   const { shifts } = await fetchTodayShifts(storeId);
