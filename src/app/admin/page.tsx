@@ -498,7 +498,7 @@ export default function AdminDashboard() {
         )}
 
         {/* ── Summary cards ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px' }}>
+        <div className="admin-summary-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px' }}>
           {[
             { label: 'Total Items', value: allItems.length, color: '#f8fafc', border: '#334155', onClick: () => { setTab('all'); setSearch(''); setFilterCategory(''); setFilterBrand(''); setFilterStatus(''); setFilterFound(''); setFilterNote(''); } },
             { label: '⚠ Critical Low', value: criticalCount, color: '#fbbf24', border: '#92400e', onClick: () => { setTab('all'); setFilterStatus('critical'); } },
@@ -602,7 +602,7 @@ export default function AdminDashboard() {
         ) : (
           <>
             {/* ── Filter + Sort bar ── */}
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const, alignItems: 'center', marginBottom: '16px', background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '12px 14px' }}>
+            <div className="admin-filter-bar" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const, alignItems: 'center', marginBottom: '16px', background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '12px 14px' }}>
               <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginRight: '4px' }}>Filter</span>
 
               <input
@@ -687,8 +687,8 @@ export default function AdminDashboard() {
                 {activeTab === 'lowstock' ? '✅ No low stock items — looking good!' : 'No items match the current filters.'}
               </div>
             ) : (
-              <div style={{ background: '#0f172a', borderRadius: '10px', border: '1px solid #334155', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <div style={{ background: '#0f172a', borderRadius: '10px', border: '1px solid #334155', overflow: 'auto' }}>
+                <table className="inv-tbl" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ background: '#1e293b' }}>
                       <th onClick={() => toggleSort('name')} style={S.th(true)}>Item {sortArrow('name')}</th>
