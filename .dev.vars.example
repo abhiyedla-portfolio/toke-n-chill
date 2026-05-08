@@ -7,3 +7,36 @@ CLOVER_MERCHANT_ID_TOKE=
 CLOVER_API_TOKEN_TOKE=
 CLOVER_MERCHANT_ID_DIZZY=
 CLOVER_API_TOKEN_DIZZY=
+
+# ── Admin Dashboard Auth ─────────────────────────────────────
+# Used by /admin login. Set strong values in production.
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=
+# Generate with: openssl rand -hex 32
+ADMIN_JWT_SECRET=
+
+# ── Operations Automation ────────────────────────────────────
+
+# Clover webhook signature verification secret (from Clover Developer Dashboard)
+# Leave blank to skip verification during development
+CLOVER_WEBHOOK_SECRET=
+
+# Telegram Bot Alerts
+# 1. Message @BotFather on Telegram → /newbot → copy the token below
+# 2. Start a chat with your new bot, then open:
+#    https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
+#    to find your chat_id
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+
+# Discord Webhook Alerts (alternative or in addition to Telegram)
+# Create a webhook: Discord channel → Edit Channel → Integrations → Webhooks
+DISCORD_WEBHOOK_URL=
+
+# Fraud / refund alert threshold in cents (default: $20.00 = 2000)
+FRAUD_REFUND_THRESHOLD_CENTS=2000
+
+# Grace periods in minutes before an alert fires
+OPEN_GRACE_MINUTES=30
+CLOSE_GRACE_MINUTES=30
+LATE_CLOCK_IN_MINUTES=20

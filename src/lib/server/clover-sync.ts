@@ -4,6 +4,7 @@ import {
   fetchItemStocks,
   type CloverItem,
 } from '../clover';
+import { extractBrandFromName } from '../brand-extraction';
 import { slugify } from '../utils';
 import type {
   D1DatabaseLike,
@@ -52,7 +53,7 @@ const UPDATE_PRODUCT_SQL = `
   SET
     clover_id = ?,
     name = ?,
-    brand = ?,
+    brand = CASE WHEN brand != 'House Brand' THEN brand ELSE ? END,
     category = ?,
     description = ?,
     variants_json = ?,
@@ -85,18 +86,24 @@ function parseTagFlag(item: CloverItem, values: string[]) {
 }
 
 function extractBrand(item: CloverItem): string {
+  // 1. Explicit Clover tag wins: e.g. tag named "brand: Geek Bar"
   const tagBrand = item.tags?.elements?.find((tag) =>
     tag.name.toLowerCase().startsWith('brand:'),
   );
-
   if (tagBrand) {
     return tagBrand.name.replace(/^brand:\s*/i, '').trim();
   }
 
+  // 2. Legacy " - " naming convention: "Geek Bar - Mango Ice" → "Geek Bar"
   if (item.name.includes(' - ')) {
     return item.name.split(' - ')[0].trim();
   }
 
+  // 3. Name-prefix dictionary (covers all known brands in the catalog)
+  const extracted = extractBrandFromName(item.name);
+  if (extracted) return extracted;
+
+  // 4. Genuine unknown — keep as "House Brand" rather than leaving it blank
   return 'House Brand';
 }
 
