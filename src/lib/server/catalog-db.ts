@@ -23,6 +23,7 @@ export interface ProductCatalogRow {
   is_visible: number | null;
   name: string | null;
   new_arrival: number | null;
+  price_cents: number | null;
   slug: string | null;
   sort_order: number | null;
   stock_quantity: number | null;
