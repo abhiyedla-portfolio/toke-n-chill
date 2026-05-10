@@ -24,6 +24,12 @@ export interface ItemSalesSummary {
   unitsSold: number;
 }
 
+export interface SalesWindow<T extends string = string> {
+  key: T;
+  startMs: number;
+  endMs: number;
+}
+
 export interface CloverOrderCredentials {
   merchantId: string;
   apiToken: string;
@@ -82,6 +88,69 @@ async function fetchOrdersPage(
   }
 }
 
+function addLineItemToSalesMap(
+  salesMap: Map<string, ItemSalesSummary>,
+  lineItem: CloverLineItem,
+) {
+  const itemId = lineItem.item?.id;
+  if (!itemId) return;
+
+  // Clover stores unitQty in thousandths (1000 = 1 unit)
+  const units = Math.max(1, Math.round((lineItem.unitQty ?? 1000) / 1000));
+
+  const existing = salesMap.get(itemId);
+  if (existing) {
+    existing.unitsSold += units;
+    return;
+  }
+
+  salesMap.set(itemId, {
+    itemId,
+    name: lineItem.name ?? 'Unknown Item',
+    unitsSold: units,
+  });
+}
+
+export async function fetchSalesForWindows<T extends string>(
+  creds: CloverOrderCredentials,
+  windows: SalesWindow<T>[],
+): Promise<Record<T, Map<string, ItemSalesSummary>>> {
+  const result = {} as Record<T, Map<string, ItemSalesSummary>>;
+  for (const window of windows) {
+    result[window.key] = new Map<string, ItemSalesSummary>();
+  }
+
+  if (windows.length === 0) return result;
+
+  const startMs = Math.min(...windows.map((window) => window.startMs));
+  const endMs = Math.max(...windows.map((window) => window.endMs));
+  let offset = 0;
+  const pageSize = 200;
+
+  while (true) {
+    const orders = await fetchOrdersPage(creds, startMs, endMs, offset);
+    if (orders.length === 0) break;
+
+    for (const order of orders) {
+      const matchingWindows = windows.filter((window) =>
+        order.createdTime >= window.startMs && order.createdTime <= window.endMs,
+      );
+      if (matchingWindows.length === 0) continue;
+
+      for (const lineItem of order.lineItems?.elements ?? []) {
+        for (const window of matchingWindows) {
+          addLineItemToSalesMap(result[window.key], lineItem);
+        }
+      }
+    }
+
+    if (orders.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return result;
+}
+
 /**
  * Fetch all orders in [startMs, endMs] and aggregate units sold per Clover item ID.
  * Returns a Map of itemId → ItemSalesSummary.
@@ -91,38 +160,6 @@ export async function fetchWeeklySales(
   startMs: number,
   endMs: number,
 ): Promise<Map<string, ItemSalesSummary>> {
-  const salesMap = new Map<string, ItemSalesSummary>();
-  let offset = 0;
-  const pageSize = 200;
-
-  while (true) {
-    const orders = await fetchOrdersPage(creds, startMs, endMs, offset);
-    if (orders.length === 0) break;
-
-    for (const order of orders) {
-      for (const lineItem of order.lineItems?.elements ?? []) {
-        const itemId = lineItem.item?.id;
-        if (!itemId) continue;
-
-        // Clover stores unitQty in thousandths (1000 = 1 unit)
-        const units = Math.max(1, Math.round((lineItem.unitQty ?? 1000) / 1000));
-
-        const existing = salesMap.get(itemId);
-        if (existing) {
-          existing.unitsSold += units;
-        } else {
-          salesMap.set(itemId, {
-            itemId,
-            name: lineItem.name ?? 'Unknown Item',
-            unitsSold: units,
-          });
-        }
-      }
-    }
-
-    if (orders.length < pageSize) break;
-    offset += pageSize;
-  }
-
-  return salesMap;
+  const windows = await fetchSalesForWindows(creds, [{ key: 'week', startMs, endMs }]);
+  return windows.week;
 }

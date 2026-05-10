@@ -42,10 +42,11 @@ const INSERT_PRODUCT_SQL = `
     hide_from_catalog,
     in_stock,
     stock_quantity,
+    price_cents,
     is_visible,
     clover_updated_at,
     synced_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const UPDATE_PRODUCT_SQL = `
@@ -62,6 +63,7 @@ const UPDATE_PRODUCT_SQL = `
     is_active = 1,
     in_stock = ?,
     stock_quantity = ?,
+    price_cents = ?,
     is_visible = ?,
     clover_updated_at = ?,
     synced_at = ?
@@ -171,6 +173,7 @@ function buildInsertStatement(
     0,
     stockQuantity > 0 ? 1 : 0,
     stockQuantity,
+    item.price ?? null,
     !item.hidden && item.available !== false ? 1 : 0,
     item.itemStock?.modifiedTime ?? item.modifiedTime ?? Date.now(),
     syncedAt,
@@ -197,6 +200,7 @@ function buildUpdateStatement(
     parseTagFlag(item, ['new', 'new arrival']) ? 1 : 0,
     stockQuantity > 0 ? 1 : 0,
     stockQuantity,
+    item.price ?? null,
     !item.hidden && item.available !== false ? 1 : 0,
     item.itemStock?.modifiedTime ?? item.modifiedTime ?? Date.now(),
     syncedAt,

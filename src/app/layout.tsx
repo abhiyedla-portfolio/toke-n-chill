@@ -4,12 +4,8 @@ import './globals.css';
 import { getBrand, getBrandId } from '@/config/brands';
 import { BrandProvider } from '@/components/BrandProvider';
 import { CatalogProvider } from '@/components/CatalogProvider';
-import AgeGate from '@/components/AgeGate';
-import Navbar from '@/components/Navbar/Navbar';
-import Footer from '@/components/Footer/Footer';
-import { CookieBanner } from '@/components/CookieBanner';
 import { LocalBusinessSchema } from '@/components/LocalBusinessSchema';
-import SmokeParticles from '@/components/SmokeParticles/SmokeParticles';
+import SiteShell from '@/components/SiteShell';
 
 const playfairDisplay = Playfair_Display({
   subsets: ['latin'],
@@ -76,12 +72,7 @@ export default function RootLayout({
       >
         <BrandProvider>
           <CatalogProvider>
-            <AgeGate />
-            <SmokeParticles />
-<Navbar />
-            <main className="relative min-h-screen">{children}</main>
-            <Footer />
-            <CookieBanner />
+            <SiteShell>{children}</SiteShell>
           </CatalogProvider>
         </BrandProvider>
       </body>
