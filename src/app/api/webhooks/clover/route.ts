@@ -21,8 +21,14 @@
 
 import 'server-only';
 import { getCatalogDb } from '@/lib/server/catalog-db';
-import { logAlert } from '@/lib/server/ops-db';
-import { sendAlert, fmtRefundAlert } from '@/lib/server/alerts';
+import { logAlert, getStoreSchedule, getAlertsByType } from '@/lib/server/ops-db';
+import {
+  sendAlert,
+  fmtRefundAlert,
+  fmtAfterHoursTransaction,
+  fmtMultipleRefunds,
+} from '@/lib/server/alerts';
+import { getTodayCst, parseScheduleTime } from '@/lib/server/clover-employees';
 
 // Clover sends a compact webhook — we then call back to get full details
 interface CloverWebhookPayload {
@@ -128,6 +134,8 @@ export async function POST(request: Request): Promise<Response> {
     if (!db) return Response.json({ ok: true });
 
     const threshold = parseInt(process.env.FRAUD_REFUND_THRESHOLD_CENTS ?? '2000', 10);
+    const afterHoursBuffer = parseInt(process.env.FRAUD_AFTER_HOURS_BUFFER_MINUTES ?? '15', 10);
+    const multiRefundCount = parseInt(process.env.FRAUD_MULTIPLE_REFUND_COUNT ?? '3', 10);
     const employeeName = order.employee?.name ?? null;
 
     // ── Check for voided order ──
@@ -175,6 +183,92 @@ export async function POST(request: Request): Promise<Response> {
               .prepare(`UPDATE ops_alerts SET channel = ? WHERE dedup_key = ?`)
               .bind(channel, dedupKey)
               .run();
+          }
+        }
+      }
+    }
+
+    // ── Multiple refunds in a 1-hour window ──
+    // After inserting a refund/void above, check if the total count this hour
+    // has hit the threshold. dedup_key encodes the hour so we only alert once.
+    const oneHourAgo = new Date(Date.now() - 60 * 60_000).toISOString();
+    const hourlyRefunds = (await getAlertsByType(db, 'refund', oneHourAgo)).filter(
+      (a) => a.store_id === storeId,
+    );
+    const hourlyVoids = (await getAlertsByType(db, 'void', oneHourAgo)).filter(
+      (a) => a.store_id === storeId,
+    );
+    const allHourlyFraud = [...hourlyRefunds, ...hourlyVoids];
+
+    if (allHourlyFraud.length >= multiRefundCount) {
+      // Recover per-refund amounts from dedup_key format "refund:orderId:amountCents"
+      const totalCents = allHourlyFraud.reduce((sum, a) => {
+        const parts = (a.dedup_key ?? '').split(':');
+        const amt = parseInt(parts[2] ?? '0', 10);
+        return sum + (isNaN(amt) ? 0 : amt);
+      }, 0);
+
+      // Dedup key scoped to the current UTC hour so it only fires once per hour
+      const hourKey = new Date().toISOString().slice(0, 13); // 'YYYY-MM-DDTHH'
+      const dedupKey = `multi_refund:${storeId}:${hourKey}`;
+
+      const message = fmtMultipleRefunds(storeId, allHourlyFraud.length, totalCents, null);
+      const inserted = await logAlert(db, {
+        storeId,
+        alertType: 'multi_refund',
+        message,
+        channel: 'pending',
+        dedupKey,
+      });
+
+      if (inserted) {
+        const { channel } = await sendAlert(message);
+        await db
+          .prepare(`UPDATE ops_alerts SET channel = ? WHERE dedup_key = ?`)
+          .bind(channel, dedupKey)
+          .run();
+        console.log(`[CloverWebhook] Sent multi_refund alert for ${storeId} (${allHourlyFraud.length} in 1h)`);
+      }
+    }
+
+    // ── After-hours transaction detection ──
+    // If the order is NOT voided, check whether it was created after close + buffer.
+    if (order.state !== 'VOIDED') {
+      const orderCreatedMs = payload.eventData?.timestamp ?? Date.now();
+      const { dateCst } = getTodayCst();
+      const schedules = await getStoreSchedule(db, storeId);
+      const dow = new Date(`${dateCst}T12:00:00`).getDay();
+      const todaySched = schedules.find((s) => s.day_of_week === dow);
+
+      if (todaySched && !todaySched.is_closed) {
+        const closeMs = parseScheduleTime(dateCst, todaySched.close_time).getTime();
+        const afterHoursMs = closeMs + afterHoursBuffer * 60_000;
+
+        if (orderCreatedMs > afterHoursMs) {
+          const minutesAfter = Math.round((orderCreatedMs - closeMs) / 60_000);
+          const message = fmtAfterHoursTransaction(
+            storeId,
+            order.total ?? 0,
+            minutesAfter,
+            order.id,
+          );
+          const dedupKey = `after_hours:${order.id}`;
+
+          const inserted = await logAlert(db, {
+            storeId,
+            alertType: 'after_hours',
+            message,
+            channel: 'pending',
+            dedupKey,
+          });
+
+          if (inserted) {
+            const { channel } = await sendAlert(message);
+            await db
+              .prepare(`UPDATE ops_alerts SET channel = ? WHERE dedup_key = ?`)
+              .bind(channel, dedupKey)
+              .run();
+            console.log(`[CloverWebhook] Sent after_hours alert for ${storeId}, order ${order.id}`);
           }
         }
       }

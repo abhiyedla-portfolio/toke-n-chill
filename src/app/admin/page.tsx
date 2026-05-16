@@ -86,7 +86,7 @@ interface LiveData {
   exclusions: Exclusion[];
 }
 
-type SortKey = 'name' | 'stock' | 'sold' | 'sold14' | 'sold30' | 'suggested' | 'category' | 'brand' | 'price';
+type SortKey = 'name' | 'stock' | 'sold' | 'sold14' | 'sold30' | 'category' | 'brand' | 'price';
 type SortDir = 'asc' | 'desc';
 type TabId = 'lowstock' | 'all' | 'skipped' | 'ordered' | 'excluded';
 type GroupKey = 'none' | 'category' | 'brand' | 'letter' | 'name';
@@ -147,6 +147,27 @@ function trendLabel(trend: Item['salesTrend']) {
   return 'Flat';
 }
 
+const CATEGORY_COLORS = [
+  '#38bdf8',
+  '#34d399',
+  '#fbbf24',
+  '#f472b6',
+  '#a78bfa',
+  '#fb7185',
+  '#2dd4bf',
+  '#f97316',
+  '#818cf8',
+  '#84cc16',
+];
+
+function categoryColor(label: string) {
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) {
+    hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
+  }
+  return CATEGORY_COLORS[hash % CATEGORY_COLORS.length];
+}
+
 // ── Debounce hook ─────────────────────────────────────────────────────────────
 
 function useDebounce<T>(value: T, ms: number): T {
@@ -160,23 +181,25 @@ function useDebounce<T>(value: T, ms: number): T {
 
 // ── Note cell — inline editable with auto-save ────────────────────────────────
 
-function NoteCell({ item, onSaved }: { item: Item; onSaved: (cloverId: string, note: string) => void }) {
-  const [value, setValue] = useState(item.note ?? '');
+function NoteCell({ item, onSaved }: { item: Item; onSaved: (item: Item, note: string) => Promise<void> }) {
+  const initialValue = item.weekNote ?? '';
+  const [value, setValue] = useState(initialValue);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const debounced = useDebounce(value, 800);
-  const initial = useRef(item.note ?? '');
+  const initial = useRef(initialValue);
+
+  useEffect(() => {
+    const next = item.weekNote ?? '';
+    initial.current = next;
+    setValue(next);
+  }, [item.cloverId, item.weekNote]);
 
   useEffect(() => {
     if (debounced === initial.current) return;
     setSaving(true);
-    fetch('/api/admin/report/annotations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cloverId: item.cloverId, itemName: item.name, note: debounced }),
-    }).then(() => {
+    onSaved(item, debounced).then(() => {
       initial.current = debounced;
-      onSaved(item.cloverId, debounced);
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
     }).finally(() => setSaving(false));
@@ -296,9 +319,9 @@ export default function AdminDashboard() {
   const [filterFound, setFilterFound] = useState('');
   const [filterNote, setFilterNote] = useState('');
   const [filterSource, setFilterSource] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('suggested');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [groupBy, setGroupBy] = useState<GroupKey>('none');
+  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [groupBy, setGroupBy] = useState<GroupKey>('category');
   const [pageSize, setPageSize] = useState<PageSize>(50);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -445,11 +468,36 @@ export default function AdminDashboard() {
     setBusy(item.cloverId, false);
   }
 
-  function handleNoteSaved(cloverId: string, note: string) {
-    setData((d) => d ? {
-      ...d,
-      items: d.items.map((i) => i.cloverId === cloverId ? { ...i, note } : i),
-    } : d);
+  async function handleWeekItemNoteSaved(item: Item, note: string) {
+    await updateWeekItem(item, { weekNote: note });
+  }
+
+  async function clearWeekNotes() {
+    if (!data?.selectedWeekId) return;
+    const ok = window.confirm('Clear the week note and every item note for this selected week?');
+    if (!ok) return;
+
+    const res = await fetch('/api/admin/report/week', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weekId: data.selectedWeekId, clearItemNotes: true }),
+    });
+
+    if (!res.ok) {
+      setActionMsg('Failed to clear notes for this week.');
+      return;
+    }
+
+    initialWeekNote.current = '';
+    setWeekNoteDraft('');
+    setWeekNoteDirty(false);
+    setData((current) => current ? {
+      ...current,
+      week: current.week ? { ...current.week, note: null } : current.week,
+      weeks: current.weeks.map((week) => week.week_id === current.selectedWeekId ? { ...week, note: null } : week),
+      items: current.items.map((item) => ({ ...item, weekNote: '' })),
+    } : current);
+    setActionMsg('Cleared notes for this week.');
   }
 
   async function sendReport() {
@@ -472,7 +520,7 @@ export default function AdminDashboard() {
     if (sortKey === key) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
     else {
       setSortKey(key);
-      setSortDir(['sold', 'sold14', 'sold30', 'suggested'].includes(key) ? 'desc' : 'asc');
+      setSortDir(['sold', 'sold14', 'sold30'].includes(key) ? 'desc' : 'asc');
     }
   }
 
@@ -526,7 +574,6 @@ export default function AdminDashboard() {
         i.category?.toLowerCase().includes(q) ||
         i.productLine?.toLowerCase().includes(q) ||
         i.flavorProfile?.toLowerCase().includes(q) ||
-        i.note?.toLowerCase().includes(q) ||
         i.weekNote?.toLowerCase().includes(q),
       );
     }
@@ -536,8 +583,8 @@ export default function AdminDashboard() {
     if (filterFound === 'found') list = list.filter((i) => i.foundInStore);
     if (filterFound === 'notfound') list = list.filter((i) => !i.foundInStore);
     if (filterSource) list = list.filter((i) => i.orderSource === filterSource);
-    if (filterNote === 'has') list = list.filter((i) => (i.note ?? '').trim().length > 0);
-    if (filterNote === 'none') list = list.filter((i) => !(i.note ?? '').trim());
+    if (filterNote === 'has') list = list.filter((i) => (i.weekNote ?? '').trim().length > 0);
+    if (filterNote === 'none') list = list.filter((i) => !(i.weekNote ?? '').trim());
     return list;
   }, [baseItems, search, filterCategory, filterBrand, filterStatus, filterFound, filterSource, filterNote]);
 
@@ -550,7 +597,6 @@ export default function AdminDashboard() {
       else if (sortKey === 'sold') cmp = a.unitsSold7d - b.unitsSold7d;
       else if (sortKey === 'sold14') cmp = a.unitsSold14d - b.unitsSold14d;
       else if (sortKey === 'sold30') cmp = a.unitsSold30d - b.unitsSold30d;
-      else if (sortKey === 'suggested') cmp = a.suggestedOrderQty - b.suggestedOrderQty;
       else if (sortKey === 'price') cmp = (a.priceCents ?? -1) - (b.priceCents ?? -1);
       else if (sortKey === 'category') cmp = (a.category ?? '').localeCompare(b.category ?? '');
       else if (sortKey === 'brand') cmp = (a.brand ?? '').localeCompare(b.brand ?? '');
@@ -596,7 +642,7 @@ export default function AdminDashboard() {
   const orderedCount = allItems.filter((i) => !i.excluded && i.weekStatus === 'ordered').length;
   const priceSplitCount = allItems.filter((i) => !i.excluded && i.priceVariants.length > 0).length;
   const relatedCount = allItems.filter((i) => !i.excluded && (i.sameFlavorOtherLines.length > 0 || i.similarProducts.length > 0)).length;
-  const withNotesCount = allItems.filter((i) => !i.excluded && (i.note ?? '').trim().length > 0).length;
+  const withNotesCount = allItems.filter((i) => !i.excluded && (i.weekNote ?? '').trim().length > 0).length;
   const activeFilterCount =
     (search ? 1 : 0) +
     (filterCategory ? 1 : 0) +
@@ -605,7 +651,7 @@ export default function AdminDashboard() {
     (filterFound ? 1 : 0) +
     (filterSource ? 1 : 0) +
     (filterNote ? 1 : 0) +
-    (groupBy !== 'none' ? 1 : 0);
+    (groupBy !== 'category' ? 1 : 0);
 
   // ── Styles ──
 
@@ -699,8 +745,17 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div>
-              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
-                Week Note
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', marginBottom: '6px' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Week Note
+                </div>
+                <button
+                  type="button"
+                  onClick={clearWeekNotes}
+                  style={{ ...S.ghostBtn(), padding: '4px 9px', fontSize: '11px' }}
+                >
+                  Clear Week Notes
+                </button>
               </div>
               <textarea
                 value={weekNoteDraft}
@@ -719,7 +774,6 @@ export default function AdminDashboard() {
             { label: 'To Order', value: orderListCount, color: '#f8fafc', border: '#334155', onClick: () => { setTab('lowstock'); setSearch(''); setFilterCategory(''); setFilterBrand(''); setFilterStatus(''); setFilterFound(''); setFilterSource(''); setFilterNote(''); } },
             { label: '⚠ Critical Low', value: criticalCount, color: '#fbbf24', border: '#92400e', onClick: () => { setTab('all'); setFilterStatus('critical'); } },
             { label: '◎ Sold & Low', value: atRiskCount, color: '#818cf8', border: '#3730a3', onClick: () => { setTab('all'); setFilterStatus('at-risk'); } },
-            { label: 'Suggested Qty', value: allItems.filter((i) => !i.excluded && i.weekStatus === 'active').reduce((sum, item) => sum + item.suggestedOrderQty, 0), color: '#34d399', border: '#065f46', onClick: () => { setTab('lowstock'); setSortKey('suggested'); setSortDir('desc'); } },
             { label: 'Price Splits', value: priceSplitCount, color: '#f472b6', border: '#831843', onClick: () => { setTab('all'); setSearch(''); setSortKey('price'); setSortDir('asc'); } },
             { label: 'Similar Found', value: relatedCount, color: '#38bdf8', border: '#075985', onClick: () => { setTab('all'); } },
             { label: 'Skipped', value: skippedCount, color: '#60a5fa', border: '#1e3a5f', onClick: () => setTab('skipped') },
@@ -888,7 +942,7 @@ export default function AdminDashboard() {
               {/* Visual divider — content filters above, view modifiers below */}
               <span aria-hidden style={{ width: '1px', height: '20px', background: '#334155', margin: '0 4px' }} />
 
-              <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupKey)} style={S.select(groupBy !== 'none')} title="Group rows by">
+              <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupKey)} style={S.select(groupBy !== 'category')} title="Group rows by">
                 {(Object.keys(GROUP_LABELS) as GroupKey[]).map((k) => (
                   <option key={k} value={k}>{k === 'none' ? GROUP_LABELS[k] : `Group: ${GROUP_LABELS[k]}`}</option>
                 ))}
@@ -896,7 +950,7 @@ export default function AdminDashboard() {
 
               {activeFilterCount > 0 && (
                 <button
-                  onClick={() => { setSearch(''); setFilterCategory(''); setFilterBrand(''); setFilterStatus(''); setFilterFound(''); setFilterSource(''); setFilterNote(''); setGroupBy('none'); }}
+                  onClick={() => { setSearch(''); setFilterCategory(''); setFilterBrand(''); setFilterStatus(''); setFilterFound(''); setFilterSource(''); setFilterNote(''); setGroupBy('category'); }}
                   style={{ ...S.btn('#7c2d12', '6px 12px'), border: '1px solid #9a3412' }}
                   title={`Reset ${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`}
                 >
@@ -936,7 +990,6 @@ export default function AdminDashboard() {
                   <thead>
                     <tr style={{ background: '#1e293b' }}>
                       <th onClick={() => toggleSort('name')} style={S.th(true)}>Item {sortArrow('name')}</th>
-                      <th onClick={() => toggleSort('suggested')} style={{ ...S.th(true), textAlign: 'center' }}>Need {sortArrow('suggested')}</th>
                       <th onClick={() => toggleSort('category')} style={S.th(true)}>Category {sortArrow('category')}</th>
                       <th onClick={() => toggleSort('brand')} style={S.th(true)}>Brand {sortArrow('brand')}</th>
                       <th onClick={() => toggleSort('price')} style={{ ...S.th(true), textAlign: 'center' }}>Price {sortArrow('price')}</th>
@@ -980,15 +1033,10 @@ export default function AdminDashboard() {
                                 {item.weekStatus === 'ordered' && badge('#14532d', 'ORDERED', '#bbf7d0')}
                                 {item.weekStatus === 'skipped' && badge('#1e3a5f', 'NEXT WEEK', '#bfdbfe')}
                               </div>
-                              <div style={{ marginTop: '4px', fontSize: '11px', color: '#64748b' }}>
-                                {item.productLine} · {item.flavorProfile}
-                              </div>
-                            </td>
-                            <td style={S.td({ textAlign: 'center' })}>
-                              {item.suggestedOrderQty > 0
-                                ? badge('#065f46', `+${item.suggestedOrderQty}`, '#bbf7d0')
-                                : <span style={{ color: '#334155' }}>—</span>}
-                            </td>
+                            <div style={{ marginTop: '4px', fontSize: '11px', color: '#64748b' }}>
+                              {item.productLine} · {item.flavorProfile}
+                            </div>
+                          </td>
                             <td style={S.td({ color: '#64748b', fontSize: '12px' })}>{item.category ?? '—'}</td>
                             <td style={S.td({ color: '#64748b', fontSize: '12px' })}>{item.brand ?? '—'}</td>
                             <td style={S.td({ textAlign: 'center', color: item.priceVariants.length > 0 ? '#f9a8d4' : '#94a3b8', fontWeight: item.priceVariants.length > 0 ? 700 : 400 })}>
@@ -1060,7 +1108,7 @@ export default function AdminDashboard() {
                               </select>
                             </td>
                             <td style={S.td({ minWidth: '160px' })}>
-                              <NoteCell item={item} onSaved={handleNoteSaved} />
+                              <NoteCell item={item} onSaved={handleWeekItemNoteSaved} />
                             </td>
                             <td style={S.td({ textAlign: 'center' })}>
                               <button
@@ -1107,19 +1155,25 @@ export default function AdminDashboard() {
 
                       if (groupBy === 'none') return paginatedItems.map(renderRow);
 
-                      return groups.flatMap(([groupKey, items]) => [
-                        <tr key={`__group_${groupKey}`} style={{ background: '#0c1426' }}>
-                          <td colSpan={14} style={{ padding: '10px 14px', borderTop: '1px solid #1e293b', borderBottom: '1px solid #1e293b' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 800, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-                              {groupKey}
-                            </span>
-                            <span style={{ marginLeft: '10px', fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
-                              {items.length} item{items.length === 1 ? '' : 's'}
-                            </span>
-                          </td>
-                        </tr>,
-                        ...items.map(renderRow),
-                      ]);
+                      return groups.flatMap(([groupKey, items]) => {
+                        const accent = groupBy === 'category' ? categoryColor(groupKey) : '#a78bfa';
+                        return [
+                          <tr key={`__group_${groupKey}`} style={{ background: '#0a1222' }}>
+                            <td colSpan={13} style={{ padding: 0, borderTop: `2px solid ${accent}`, borderBottom: '1px solid #1e293b' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '13px 16px', borderLeft: `6px solid ${accent}` }}>
+                                <span aria-hidden style={{ width: '12px', height: '12px', borderRadius: '999px', background: accent, boxShadow: `0 0 16px ${accent}66`, flex: '0 0 auto' }} />
+                                <span style={{ fontSize: '14px', fontWeight: 900, color: '#f8fafc', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                                  {groupKey}
+                                </span>
+                                <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 700 }}>
+                                  {items.length} item{items.length === 1 ? '' : 's'}
+                                </span>
+                              </div>
+                            </td>
+                          </tr>,
+                          ...items.map(renderRow),
+                        ];
+                      });
                     })()}
                   </tbody>
                 </table>

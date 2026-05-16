@@ -209,14 +209,23 @@ async function runStatements(db: D1DatabaseLike, statements: D1PreparedStatement
 }
 
 async function upsertWeekRun(db: D1DatabaseLike, week: { weekId: string; weekStart: string; weekEnd: string }) {
+  const previousNoteResult = await db.prepare(
+    `SELECT note
+     FROM inventory_week_runs
+     WHERE week_id < ?
+     ORDER BY week_id DESC
+     LIMIT 1`,
+  ).bind(week.weekId).all<{ note: string | null }>();
+  const previousNote = previousNoteResult.results?.[0]?.note ?? null;
+
   await db.prepare(
-    `INSERT INTO inventory_week_runs (week_id, week_start, week_end)
-     VALUES (?, ?, ?)
+    `INSERT INTO inventory_week_runs (week_id, week_start, week_end, note)
+     VALUES (?, ?, ?, ?)
      ON CONFLICT(week_id) DO UPDATE SET
        week_start = excluded.week_start,
        week_end = excluded.week_end,
        updated_at = CURRENT_TIMESTAMP`,
-  ).bind(week.weekId, week.weekStart, week.weekEnd).run();
+  ).bind(week.weekId, week.weekStart, week.weekEnd, previousNote).run();
 }
 
 async function upsertWeekItems(
@@ -225,6 +234,22 @@ async function upsertWeekItems(
   items: InventoryComparableItem[],
   intelligence: ReturnType<typeof buildInventoryIntelligence>,
 ) {
+  const previousNotesResult = await db.prepare(
+    `SELECT clover_id, note
+     FROM inventory_week_items
+     WHERE week_id = (
+       SELECT week_id
+       FROM inventory_week_runs
+       WHERE week_id < ?
+       ORDER BY week_id DESC
+       LIMIT 1
+     )`,
+  ).bind(weekId).all<{ clover_id: string; note: string | null }>();
+
+  const previousNoteMap = new Map(
+    (previousNotesResult.results ?? []).map((row) => [row.clover_id, row.note]),
+  );
+
   const statements = items.map((item) => {
     const insight = intelligence.get(item.cloverId);
     return db.prepare(
@@ -239,8 +264,9 @@ async function upsertWeekItems(
          units_sold_7d,
          units_sold_prev_7d,
          units_sold_30d,
-         suggested_order_qty
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         suggested_order_qty,
+         note
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(week_id, clover_id) DO UPDATE SET
          item_name = excluded.item_name,
          brand = excluded.brand,
@@ -264,6 +290,7 @@ async function upsertWeekItems(
       item.unitsSoldPrev7d,
       item.unitsSold30d,
       insight?.suggestedOrderQty ?? 0,
+      previousNoteMap.get(item.cloverId) ?? null,
     );
   });
 

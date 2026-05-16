@@ -1,27 +1,80 @@
 /**
  * alerts.ts
- * Send notifications to Telegram and/or Discord.
+ * Send notifications via WhatsApp (Twilio), Telegram, or Discord.
  *
- * Set env vars:
- *   TELEGRAM_BOT_TOKEN  — from @BotFather
- *   TELEGRAM_CHAT_ID    — your personal or group chat ID
- *   DISCORD_WEBHOOK_URL — webhook URL from a Discord channel's settings
+ * ── Primary: WhatsApp via Twilio ─────────────────────────────
+ * Required env vars:
+ *   TWILIO_ACCOUNT_SID      — from console.twilio.com
+ *   TWILIO_AUTH_TOKEN       — from console.twilio.com
+ *   TWILIO_WHATSAPP_FROM    — your Twilio WhatsApp sender
+ *                             Sandbox:    whatsapp:+14155238886
+ *                             Production: whatsapp:+1XXXXXXXXXX (your approved number)
+ *   TWILIO_WHATSAPP_TO      — your WhatsApp number (e.g. whatsapp:+12105551234)
+ *                             Can be comma-separated for multiple recipients:
+ *                             whatsapp:+12105551234,whatsapp:+15125559876
  *
- * If both are set, both channels receive the alert.
- * If neither is set, alerts are only logged to D1.
+ * ── Optional fallbacks ────────────────────────────────────────
+ *   TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
+ *   DISCORD_WEBHOOK_URL
+ *
+ * Any combination of channels can be active at once.
+ * All configured channels receive every alert simultaneously.
  */
 
-export type AlertChannel = 'telegram' | 'discord' | 'both' | 'none';
+export type AlertChannel = 'whatsapp' | 'telegram' | 'discord' | 'multi' | 'none';
 
 export interface AlertResult {
   channel: AlertChannel;
   ok: boolean;
 }
 
+// ── Shared: strip HTML tags for plain-text channels ───────────
+
+function toPlainText(html: string): string {
+  return html
+    .replace(/<b>([\s\S]*?)<\/b>/g, '$1')
+    .replace(/<i>([\s\S]*?)<\/i>/g, '$1')
+    .replace(/<code>([\s\S]*?)<\/code>/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .trim();
+}
+
+// ── WhatsApp via Baileys service ──────────────────────────────
+// The Baileys service is a separate Node.js process that maintains a
+// persistent WhatsApp session and forwards messages to a group.
+// Set WHATSAPP_SERVICE_URL + WHATSAPP_SERVICE_SECRET in your env.
+
+async function sendWhatsApp(message: string): Promise<boolean> {
+  const serviceUrl    = process.env.WHATSAPP_SERVICE_URL;
+  const serviceSecret = process.env.WHATSAPP_SERVICE_SECRET;
+
+  if (!serviceUrl || !serviceSecret) return false;
+
+  try {
+    const res = await fetch(`${serviceUrl}/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: serviceSecret, message: toPlainText(message) }),
+    });
+
+    if (res.ok) {
+      console.log('[Alerts] WhatsApp group message sent via Baileys');
+      return true;
+    }
+
+    const err = await res.text();
+    console.error(`[Alerts] Baileys service error ${res.status}: ${err}`);
+    return false;
+  } catch (err) {
+    console.error('[Alerts] Baileys service unreachable:', err);
+    return false;
+  }
+}
+
 // ── Telegram ─────────────────────────────────────────────────
 
 async function sendTelegram(message: string): Promise<boolean> {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const token  = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return false;
 
@@ -38,8 +91,7 @@ async function sendTelegram(message: string): Promise<boolean> {
     });
 
     if (!res.ok) {
-      const body = await res.text();
-      console.error(`[Alerts] Telegram error ${res.status}: ${body}`);
+      console.error(`[Alerts] Telegram error ${res.status}: ${await res.text()}`);
       return false;
     }
     return true;
@@ -55,12 +107,8 @@ async function sendDiscord(message: string): Promise<boolean> {
   const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
   if (!webhookUrl) return false;
 
-  // Convert Telegram HTML to plain text for Discord
-  const plain = message
-    .replace(/<b>(.*?)<\/b>/g, '**$1**')
-    .replace(/<i>(.*?)<\/i>/g, '*$1*')
-    .replace(/<code>(.*?)<\/code>/g, '`$1`')
-    .replace(/<[^>]+>/g, '');
+  const plain = toPlainText(message)
+    .replace(/\*\*(.*?)\*\*/g, '**$1**'); // keep bold for Discord markdown
 
   try {
     const res = await fetch(webhookUrl, {
@@ -83,40 +131,57 @@ async function sendDiscord(message: string): Promise<boolean> {
 // ── Public API ────────────────────────────────────────────────
 
 /**
- * Send an alert to all configured channels.
- * Returns which channel was used and whether it succeeded.
+ * Send an alert to all configured channels simultaneously.
+ * WhatsApp is primary; Telegram and Discord are optional additions.
  */
 export async function sendAlert(message: string): Promise<AlertResult> {
+  const hasWhatsApp = !!(
+    process.env.TWILIO_ACCOUNT_SID &&
+    process.env.TWILIO_AUTH_TOKEN &&
+    process.env.TWILIO_WHATSAPP_FROM &&
+    process.env.TWILIO_WHATSAPP_TO
+  );
   const hasTelegram = !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID);
-  const hasDiscord = !!process.env.DISCORD_WEBHOOK_URL;
+  const hasDiscord  = !!process.env.DISCORD_WEBHOOK_URL;
 
-  if (!hasTelegram && !hasDiscord) {
-    console.log(`[Alerts] No channels configured. Message:\n${message}`);
+  const channelCount = [hasWhatsApp, hasTelegram, hasDiscord].filter(Boolean).length;
+
+  if (channelCount === 0) {
+    console.log(`[Alerts] No channels configured. Message:\n${toPlainText(message)}`);
     return { channel: 'none', ok: false };
   }
 
-  const results = await Promise.all([
+  const [waOk, tOk, dOk] = await Promise.all([
+    hasWhatsApp ? sendWhatsApp(message) : Promise.resolve(null),
     hasTelegram ? sendTelegram(message) : Promise.resolve(null),
-    hasDiscord ? sendDiscord(message) : Promise.resolve(null),
+    hasDiscord  ? sendDiscord(message)  : Promise.resolve(null),
   ]);
 
-  const tOk = results[0];
-  const dOk = results[1];
+  const ok = (waOk === true) || (tOk === true) || (dOk === true);
+
+  // Determine reported channel name
+  const activeChannels = [
+    waOk === true ? 'whatsapp' : null,
+    tOk  === true ? 'telegram' : null,
+    dOk  === true ? 'discord'  : null,
+  ].filter(Boolean);
 
   const channel: AlertChannel =
-    tOk !== null && dOk !== null ? 'both' :
-    tOk !== null ? 'telegram' :
-    'discord';
-
-  const ok = (tOk === true) || (dOk === true);
+    activeChannels.length > 1 ? 'multi' :
+    activeChannels[0] === 'whatsapp' ? 'whatsapp' :
+    activeChannels[0] === 'telegram' ? 'telegram' :
+    activeChannels[0] === 'discord'  ? 'discord'  :
+    'none';
 
   return { channel, ok };
 }
 
 // ── Message formatters ────────────────────────────────────────
+// All messages use plain text + emoji (works on WhatsApp, Telegram, Discord).
+// HTML tags (<b>, <code>) are stripped for WhatsApp/Discord by toPlainText().
 
 const STORE_LABELS: Record<string, string> = {
-  toke: 'Toke-N-Chill',
+  toke:  'Toke-N-Chill',
   dizzy: 'Dizzy Dose',
 };
 
@@ -128,47 +193,80 @@ function nowCst(): string {
   return new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Chicago',
     weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
+    month:   'short',
+    day:     'numeric',
+    hour:    'numeric',
+    minute:  '2-digit',
+    hour12:  true,
   }).format(new Date());
 }
 
-export function fmtLateOpen(storeId: string, expectedTime: string, minutesLate: number): string {
-  return (
-    `🔴 <b>Store not open yet</b>\n` +
-    `🏪 <b>Store:</b> ${storeLabel(storeId)}\n` +
-    `⏰ <b>Should have opened at:</b> ${expectedTime}\n` +
-    `⌛ <b>${minutesLate} min late</b> — no orders detected yet\n` +
-    `📅 ${nowCst()}`
-  );
+// ── Store open/close (clock-in based) ────────────────────────
+
+/** Converts 'HH:MM' 24h schedule time to '10:00 AM' display format. */
+function formatTime12h(timeCst: string): string {
+  const [hStr, mStr] = timeCst.split(':');
+  const h = parseInt(hStr, 10);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${hour12}:${mStr} ${period}`;
 }
 
-export function fmtNotClosed(storeId: string, expectedTime: string, minutesOverdue: number): string {
-  return (
-    `🟡 <b>Store may not be closed</b>\n` +
-    `🏪 <b>Store:</b> ${storeLabel(storeId)}\n` +
-    `⏰ <b>Should have closed at:</b> ${expectedTime}\n` +
-    `⌛ <b>${minutesOverdue} min overdue</b> — last order was recently\n` +
-    `📅 ${nowCst()}`
-  );
-}
-
-export function fmtEmployeeLate(
+/**
+ * Escalating "store not open" alert.
+ * alertNum 1 = first alert, 2+ = follow-up escalations.
+ */
+export function fmtStoreNotOpen(
   storeId: string,
-  employeeName: string,
+  openTimeCst: string,
+  minutesSinceOpen: number,
+  alertNum: number,
+): string {
+  const headline = alertNum === 1 ? '🔴 Store not open' : '🔴 Store still not open';
+  return [
+    headline,
+    `🏪 ${storeLabel(storeId)}`,
+    `⏰ Should have opened at: ${formatTime12h(openTimeCst)} CST`,
+    `⌛ ${minutesSinceOpen} min since open time — nobody clocked in`,
+    `📅 ${nowCst()}`,
+  ].join('\n');
+}
+
+/**
+ * Fires when the last employee clocked out more than 15 min before scheduled close.
+ */
+export function fmtEarlyClose(
+  storeId: string,
+  closeTimeCst: string,
+  minutesEarly: number,
+): string {
+  return [
+    `🟡 Store may be closing early`,
+    `🏪 ${storeLabel(storeId)}`,
+    `⏰ Scheduled close: ${formatTime12h(closeTimeCst)} CST`,
+    `⌛ Nobody clocked in — ${minutesEarly} min before close`,
+    `📅 ${nowCst()}`,
+  ].join('\n');
+}
+
+/**
+ * Fires when at least one employee is still clocked in 15 min after scheduled close.
+ */
+export function fmtStillOpen(
+  storeId: string,
+  closeTimeCst: string,
   minutesLate: number,
 ): string {
-  return (
-    `🟠 <b>Employee late to clock in</b>\n` +
-    `🏪 <b>Store:</b> ${storeLabel(storeId)}\n` +
-    `👤 <b>Employee:</b> ${employeeName}\n` +
-    `⌛ <b>${minutesLate} min late</b>\n` +
-    `📅 ${nowCst()}`
-  );
+  return [
+    `🌙 Employee still at store`,
+    `🏪 ${storeLabel(storeId)}`,
+    `⏰ Should have closed at: ${formatTime12h(closeTimeCst)} CST`,
+    `⌛ ${minutesLate} min past close — someone is still clocked in`,
+    `📅 ${nowCst()}`,
+  ].join('\n');
 }
+
+// ── Fraud / transaction anomalies ─────────────────────────────
 
 export function fmtRefundAlert(
   storeId: string,
@@ -177,29 +275,46 @@ export function fmtRefundAlert(
   orderId: string,
 ): string {
   const amtStr = `$${(amount / 100).toFixed(2)}`;
-  const emp = employeeName ? `👤 <b>Employee:</b> ${employeeName}\n` : '';
-  return (
-    `🚨 <b>Large refund / void detected</b>\n` +
-    `🏪 <b>Store:</b> ${storeLabel(storeId)}\n` +
-    `💸 <b>Amount:</b> ${amtStr}\n` +
-    emp +
-    `🔑 <b>Order:</b> <code>${orderId}</code>\n` +
-    `📅 ${nowCst()}`
-  );
+  const lines = [
+    `🚨 Large refund / void detected`,
+    `🏪 ${storeLabel(storeId)}`,
+    `💸 Amount: ${amtStr}`,
+  ];
+  if (employeeName) lines.push(`👤 Employee: ${employeeName}`);
+  lines.push(`🔑 Order: ${orderId}`, `📅 ${nowCst()}`);
+  return lines.join('\n');
 }
 
-export function fmtStoreOpened(storeId: string, minutesLate: number): string {
-  if (minutesLate <= 0) {
-    return (
-      `✅ <b>Store opened on time</b>\n` +
-      `🏪 ${storeLabel(storeId)}\n` +
-      `📅 ${nowCst()}`
-    );
-  }
-  return (
-    `⚠️ <b>Store opened late</b>\n` +
-    `🏪 <b>Store:</b> ${storeLabel(storeId)}\n` +
-    `⌛ <b>${minutesLate} min late</b>\n` +
-    `📅 ${nowCst()}`
-  );
+export function fmtAfterHoursTransaction(
+  storeId: string,
+  amount: number,
+  minutesAfterClose: number,
+  orderId: string,
+): string {
+  const amtStr = `$${(amount / 100).toFixed(2)}`;
+  return [
+    `🌙 After-hours transaction`,
+    `🏪 ${storeLabel(storeId)}`,
+    `💸 Amount: ${amtStr}`,
+    `⏰ ${minutesAfterClose} min after closing`,
+    `🔑 Order: ${orderId}`,
+    `📅 ${nowCst()}`,
+  ].join('\n');
+}
+
+export function fmtMultipleRefunds(
+  storeId: string,
+  count: number,
+  totalAmount: number,
+  employeeName: string | null,
+): string {
+  const amtStr = `$${(totalAmount / 100).toFixed(2)}`;
+  const lines = [
+    `🚨 Multiple refunds in short window`,
+    `🏪 ${storeLabel(storeId)}`,
+    `💸 ${count} refunds totalling ${amtStr} in the last hour`,
+  ];
+  if (employeeName) lines.push(`👤 Employee: ${employeeName}`);
+  lines.push(`📅 ${nowCst()}`);
+  return lines.join('\n');
 }

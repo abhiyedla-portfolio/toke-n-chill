@@ -336,3 +336,45 @@ export async function getAlertsByType(
     .all<OpsAlert>();
   return result.results ?? [];
 }
+
+/**
+ * Returns all shifts where the employee is currently clocked in
+ * (clock_in_at is set, clock_out_at is null) for a given store + date.
+ */
+export async function getActiveShifts(
+  db: D1DatabaseLike,
+  storeId: string,
+  date: string,
+): Promise<EmployeeShift[]> {
+  const result = await db
+    .prepare(
+      `SELECT * FROM employee_shifts
+       WHERE store_id = ? AND shift_date = ?
+         AND clock_in_at IS NOT NULL
+         AND clock_out_at IS NULL
+       ORDER BY clock_in_at ASC`,
+    )
+    .bind(storeId, date)
+    .all<EmployeeShift>();
+  return result.results ?? [];
+}
+
+/**
+ * Returns true if any employee has clocked in today for this store,
+ * regardless of whether they have since clocked out.
+ */
+export async function hasAnyClockInToday(
+  db: D1DatabaseLike,
+  storeId: string,
+  date: string,
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `SELECT shift_id FROM employee_shifts
+       WHERE store_id = ? AND shift_date = ? AND clock_in_at IS NOT NULL
+       LIMIT 1`,
+    )
+    .bind(storeId, date)
+    .all<{ shift_id: string }>();
+  return (result.results?.length ?? 0) > 0;
+}
