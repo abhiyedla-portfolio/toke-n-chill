@@ -11,14 +11,17 @@
  *   - employee_shifts rows from D1
  */
 
-import { NextResponse } from 'next/server';
-import { getDb }         from '@/lib/server/catalog-db';
+import { NextResponse }  from 'next/server';
+import { getCatalogDb }  from '@/lib/server/catalog-db';
 import { fetchTodayShifts, getCloverEmployeeCredentials, getTodayCst } from '@/lib/server/clover-employees';
 
 export const runtime = 'edge';
 
 export async function GET() {
-  const db = getDb();
+  const db = await getCatalogDb();
+  if (!db) {
+    return NextResponse.json({ error: 'D1 database not available — check CATALOG_DB binding' }, { status: 500 });
+  }
   const { dateCst } = getTodayCst();
 
   // 1. Env var presence check
