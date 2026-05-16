@@ -35,15 +35,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           .admin-page-wrap { padding-top: 34px; }
 
           /* Mobile: hide non-essential inventory columns so buying actions remain usable.
-             Order: 1 Item · 2 Need · 3 Category · 4 Brand · 5 Price · 6 Stock ·
-             7 Sold 7d · 8 Sold 14d · 9 Sold 30d · 10 Matches · 11 Source ·
-             12 Note · 13 Found · 14 Actions. */
+             Order: 1 Item · 2 Category · 3 Brand · 4 Price · 5 Stock ·
+             6 Sold 7d · 7 Sold 14d · 8 Sold 30d · 9 Matches · 10 Source ·
+             11 Note · 12 Found · 13 Actions. */
           @media (max-width: 768px) {
+            .inv-tbl th:nth-child(2), .inv-tbl td:nth-child(2),
             .inv-tbl th:nth-child(3), .inv-tbl td:nth-child(3),
             .inv-tbl th:nth-child(4), .inv-tbl td:nth-child(4),
-            .inv-tbl th:nth-child(5), .inv-tbl td:nth-child(5),
-            .inv-tbl th:nth-child(10), .inv-tbl td:nth-child(10),
-            .inv-tbl th:nth-child(13), .inv-tbl td:nth-child(13) {
+            .inv-tbl th:nth-child(9), .inv-tbl td:nth-child(9),
+            .inv-tbl th:nth-child(12), .inv-tbl td:nth-child(12) {
               display: none;
             }
             /* Tighter padding + a bit more breathing room for the Note textarea on mobile */

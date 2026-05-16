@@ -21,7 +21,18 @@ ADMIN_JWT_SECRET=
 # Leave blank to skip verification during development
 CLOVER_WEBHOOK_SECRET=
 
-# Telegram Bot Alerts
+# ── WhatsApp Group Alerts via Baileys service ────────────────────────
+# The Baileys service is a separate Node.js app (see baileys-service/).
+# It maintains a persistent WhatsApp session and forwards messages to your group.
+#
+# WHATSAPP_SERVICE_URL    — URL where the Baileys service is running
+#                           Local:      http://localhost:3001
+#                           Deployed:   https://your-app.railway.app
+# WHATSAPP_SERVICE_SECRET — must match SERVICE_SECRET in baileys-service/.env
+WHATSAPP_SERVICE_URL=http://localhost:3001
+WHATSAPP_SERVICE_SECRET=change-me-to-something-secure
+
+# ── Telegram Bot Alerts (optional — fires alongside WhatsApp) ────────
 # 1. Message @BotFather on Telegram → /newbot → copy the token below
 # 2. Start a chat with your new bot, then open:
 #    https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
@@ -29,12 +40,17 @@ CLOVER_WEBHOOK_SECRET=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 
-# Discord Webhook Alerts (alternative or in addition to Telegram)
+# ── Discord Webhook Alerts (optional — fires alongside WhatsApp) ─────
 # Create a webhook: Discord channel → Edit Channel → Integrations → Webhooks
 DISCORD_WEBHOOK_URL=
 
-# Fraud / refund alert threshold in cents (default: $20.00 = 2000)
+# Fraud detection thresholds
+# Individual refund/void alert threshold in cents (default: $20.00 = 2000)
 FRAUD_REFUND_THRESHOLD_CENTS=2000
+# How many refunds/voids in a 1-hour window before a "multiple refunds" alert fires
+FRAUD_MULTIPLE_REFUND_COUNT=3
+# Minutes after scheduled close before an order is flagged as after-hours (default: 15)
+FRAUD_AFTER_HOURS_BUFFER_MINUTES=15
 
 # Grace periods in minutes before an alert fires
 OPEN_GRACE_MINUTES=30

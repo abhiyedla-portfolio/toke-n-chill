@@ -21,13 +21,13 @@ interface ScheduledControllerLike {
 // Friday 11 PM UTC = Friday 6 PM CDT (UTC-5, Mar–Nov).
 const INVENTORY_REPORT_CRON = '0 23 * * 5';
 
-// Ops check every 15 minutes, 7 AM–2 AM UTC (2 AM–9 PM CDT) — covers full store hours
-// '*/15 7-23,0-2 * * *' isn't valid cron; Cloudflare supports standard 5-field cron.
-// We use two cron triggers to cover the window:
-//   '*/15 12-23 * * *'  → every 15 min, noon–midnight UTC (7 AM–7 PM CDT)
-//   '*/15 0-3 * * *'    → every 15 min, midnight–3 AM UTC (7 PM–10 PM CDT)
-const OPS_CHECK_CRON_A = '*/15 12-23 * * *';
-const OPS_CHECK_CRON_B = '*/15 0-3 * * *';
+// Ops check every 5 minutes during store hours (CDT = UTC-5, CST = UTC-6).
+// Store hours ~10 AM–9 PM CST → roughly UTC 15:00–03:00.
+// Two triggers cover the window (Cloudflare 5-field cron can't span midnight in one rule):
+//   '*/5 14-23 * * *' → every 5 min, 2 PM–midnight UTC  (~9 AM–7 PM CDT)
+//   '*/5 0-4 * * *'   → every 5 min, midnight–4 AM UTC  (~7 PM–11 PM CDT)
+const OPS_CHECK_CRON_A = '*/5 14-23 * * *';
+const OPS_CHECK_CRON_B = '*/5 0-4 * * *';
 
 const worker = {
   fetch: nextWorker.fetch,

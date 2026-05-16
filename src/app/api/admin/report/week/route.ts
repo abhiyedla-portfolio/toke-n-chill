@@ -46,6 +46,7 @@ export async function POST(request: Request) {
     itemStatus?: unknown;
     orderSource?: unknown;
     skippedUntil?: unknown;
+    clearItemNotes?: unknown;
   };
 
   try {
@@ -61,8 +62,24 @@ export async function POST(request: Request) {
 
   const cloverId = typeof body.cloverId === 'string' ? body.cloverId.trim() : '';
   const note = typeof body.note === 'string' ? body.note : null;
+  const clearItemNotes = body.clearItemNotes === true;
 
   if (!cloverId) {
+    if (clearItemNotes) {
+      await db.prepare(
+        `UPDATE inventory_week_runs
+         SET note = NULL, updated_at = CURRENT_TIMESTAMP
+         WHERE week_id = ?`,
+      ).bind(weekId).run();
+      await db.prepare(
+        `UPDATE inventory_week_items
+         SET note = '', updated_at = CURRENT_TIMESTAMP
+         WHERE week_id = ?`,
+      ).bind(weekId).run();
+
+      return Response.json({ ok: true, weekId, clearedItemNotes: true });
+    }
+
     await db.prepare(
       `UPDATE inventory_week_runs
        SET note = ?, updated_at = CURRENT_TIMESTAMP
