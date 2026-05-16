@@ -15,8 +15,6 @@ import { NextResponse }  from 'next/server';
 import { getCatalogDb }  from '@/lib/server/catalog-db';
 import { fetchTodayShifts, getCloverEmployeeCredentials, getTodayCst } from '@/lib/server/clover-employees';
 
-export const runtime = 'edge';
-
 export async function GET() {
   const db = await getCatalogDb();
   if (!db) {
